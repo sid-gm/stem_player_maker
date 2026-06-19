@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snap, explained</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#2a3140;
+    --ink:#e6edf3; --mut:#9aa7b4; --accent:#7c9cff;
+    --sample:#f0a35e; --original:#5ec2f0; --snapped:#67d98b;
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:960px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:30px;margin:0 0 6px}
+  h2{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--mut);margin:0 0 24px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px;margin:18px 0}
+  .big-idea{background:linear-gradient(135deg,#1a2340,#161b22);border-color:#33406b}
+  .big-idea p{margin:10px 0}
+  .tag{display:inline-block;background:#243049;color:#aac4ff;border-radius:999px;
+    padding:2px 10px;font-size:12px;font-weight:600;letter-spacing:.3px}
+  .controls{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  label.fld{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--mut)}
+  select,button{font:inherit;background:var(--panel2);color:var(--ink);
+    border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+  button{cursor:pointer;font-weight:600}
+  button.go{background:var(--accent);color:#0b1020;border-color:transparent}
+  button.go:hover{filter:brightness(1.08)}
+  button:disabled{opacity:.5;cursor:default}
+  .hidden{display:none}
+  .muted{color:var(--mut)}
+  .small{font-size:13px}
+
+  /* timeline */
+  .timeline{position:relative;height:70px;background:var(--panel2);border-radius:10px;
+    border:1px solid var(--line);overflow:hidden;margin-top:14px}
+  .occ{position:absolute;top:14px;height:42px;border-radius:6px;opacity:.85;
+    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
+    color:#0b1020;overflow:hidden}
+  .marker{position:absolute;top:0;height:100%;width:0;border-left:2px dashed #fff}
+  .pin{position:absolute;top:-2px;transform:translateX(-50%);font-size:11px;font-weight:700;
+    padding:2px 7px;border-radius:6px;white-space:nowrap;z-index:3}
+  .pin.src{background:var(--sample);color:#0b1020}
+  .pin.tgt{background:var(--snapped);color:#0b1020}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px}
+  .legend span{display:flex;align-items:center;gap:6px;color:var(--mut)}
+  .swatch{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+  /* audio cards */
+  .clips{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:8px}
+  @media(max-width:760px){.clips{grid-template-columns:1fr}}
+  .clip{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .clip h3{margin:0 0 2px;font-size:15px}
+  .clip .who{font-size:12px;margin:0 0 10px;min-height:32px}
+  .clip canvas{width:100%;height:60px;display:block;background:#0c121d;border-radius:8px}
+  .clip .play{margin-top:10px;width:100%;display:flex;gap:8px;align-items:center;justify-content:center}
+  .clip.sample{border-top:3px solid var(--sample)}
+  .clip.original{border-top:3px solid var(--original)}
+  .clip.snapped{border-top:3px solid var(--snapped)}
+  .ab{margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+
+  /* pitch wheel + corrections */
+  .twocol{display:grid;grid-template-columns:280px 1fr;gap:20px;align-items:center}
+  @media(max-width:760px){.twocol{grid-template-columns:1fr}}
+  .wheelcap{font-size:15px}
+  .wheelcap b{color:var(--ink)}
+  .axes{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+  @media(max-width:520px){.axes{grid-template-columns:1fr}}
+  .axis{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .axis .name{font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px}
+  .axis .ba{font-size:13px;color:var(--mut);margin-top:4px}
+  .axis .ba b{color:var(--ink)}
+  .dot{width:9px;height:9px;border-radius:50%}
+  .err{background:#3a1d22;border-color:#7a2a33;color:#ffd7db}
+  .listen{background:#10261a;border:1px solid #2f6b46;border-radius:12px;padding:14px 16px;
+    margin-top:16px;color:#cdeed8}
+  .listen b{color:#fff}
+  code{background:#0c121d;padding:1px 6px;border-radius:5px;color:#cbd5e1}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Snap, explained 🎚️</h1>
+  <p class="sub">A plain-English, see-and-hear walkthrough of what the snap engine does.</p>
+
+  <div class="card big-idea">
+    <span class="tag">THE BIG IDEA</span>
+    <p><b>Think of "snap-to-grid" in a design app</b> — you drop a box near a line and it
+      clicks neatly into place. We're doing the same thing, <b>but for sound.</b></p>
+    <p>A song is built from short chunks that <b>repeat</b> (a chunk ≈ 1.7 seconds here —
+      musicians call it a "bar"). The same musical figure comes back over and over, but each
+      time the song is in a different <b>musical "flavor"</b> (musicians call it a <i>chord</i>) —
+      so the figure is played a little higher or lower to fit.</p>
+    <p><b>The goal:</b> you drop in <i>your own</i> sound once, and we automatically
+      re-tune, re-time, and re-level it so it fits perfectly into <i>every</i> spot where
+      that figure repeats — like autotune + auto-timing, done for you.</p>
+    <p class="small muted">Below we prove the math works using the song's <i>own</i> sound as a
+      stand-in for "your upload": we take the figure from one spot and snap it onto another spot
+      that's in a different flavor. If it sounds right there, the engine works.</p>
+  </div>
+
+  <div class="card">
+    <div class="controls">
+      <label class="fld">Song
+        <select id="song"></select>
+      </label>
+      <label class="fld">Repeating figure (pattern)
+        <select id="label"></select>
+      </label>
+      <button class="go" id="run">▶ Run snap &amp; explain</button>
+    </div>
+    <p id="status" class="small muted" style="margin:12px 0 0"></p>
+  </div>
+
+  <div id="results" class="hidden">
+
+    <div class="card">
+      <span class="tag">STEP 1 · WHERE IT REPEATS</span>
+      <h2 id="tl-title">This figure repeats across the song</h2>
+      <p class="muted small" id="tl-desc"></p>
+      <div class="timeline" id="timeline"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="card">
+      <span class="tag">STEP 2 · THE PITCH FIX</span>
+      <h2>We moved the sound to the right "height"</h2>
+      <div class="twocol">
+        <canvas id="wheel" width="280" height="280" style="width:280px;height:280px;margin:0 auto;display:block"></canvas>
+        <div class="wheelcap" id="wheelcap"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="tag">STEP 3 · LISTEN</span>
+      <h2>Hear it for yourself</h2>
+      <p class="muted small">Three clips. The left one is the raw sound. The middle is the
+        real track (our target). The right is the raw sound after snapping — it should match
+        the middle's <b>pitch</b>.</p>
+      <div class="clips">
+        <div class="clip sample">
+          <h3>🎤 The raw sound</h3>
+          <p class="who">The figure we're moving, untouched.</p>
+          <canvas data-wave="sample" width="600" height="120"></canvas>
+          <div class="play"><button data-play="sample">▶ Play raw</button></div>
+        </div>
+        <div class="clip original">
+          <h3>🎯 What's really there</h3>
+          <p class="who">The actual track at the target spot. This is what we want to match.</p>
+          <canvas data-wave="original" width="600" height="120"></canvas>
+          <div class="play"><button data-play="original">▶ Play target</button></div>
+        </div>
+        <div class="clip snapped">
+          <h3>✨ Snapped to fit</h3>
+          <p class="who">The raw sound, auto re-tuned &amp; re-timed for this spot.</p>
+          <canvas data-wave="snapped" width="600" height="120"></canvas>
+          <div class="play"><button data-play="snapped">▶ Play snapped</button></div>
+        </div>
+      </div>
+      <div class="ab">
+        <button id="playAb">▶ Play all three in a row</button>
+        <span class="muted small">raw → target → snapped (with a short gap between)</span>
+      </div>
+      <div class="listen">
+        <b>👂 What to listen for:</b> the <b>middle</b> and <b>right</b> clips should sound like
+        they're at the same musical <i>height</i> — same flavor. The <b>left</b> clip will sound
+        higher or lower; that's the "before". You don't need to name any notes — just hear whether
+        the right one "fits" where the left one didn't.
+      </div>
+    </div>
+
+    <div class="card">
+      <span class="tag">STEP 4 · THE FOUR AUTO-FIXES</span>
+      <h2>Everything we corrected, automatically</h2>
+      <div class="axes" id="axes"></div>
+    </div>
+
+  </div>
+
+  <div id="boot" class="card err hidden"></div>
+
+</div>
+
+<script>
+const NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const ctx = new (window.AudioContext||window.webkitAudioContext)();
+const buffers = {};            // name -> AudioBuffer
+let last = null;               // last snap-preview JSON
+
+const $ = s => document.querySelector(s);
+const enc = p => p.split('/').map(encodeURIComponent).join('/');
+
+async function getJSON(url){ const r = await fetch(url); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+
+async function loadSongs(){
+  try{
+    const songs = await getJSON('/api/songs');
+    $('#song').innerHTML = songs.map(s=>`<option>${s}</option>`).join('');
+    await loadLabels();
+  }catch(e){
+    $('#boot').classList.remove('hidden');
+    $('#boot').innerHTML = `Couldn't reach the server. Start it first:<br>
+      <code>./.venv/bin/python server.py</code><br>then open
+      <code>http://localhost:8753/snap_explainer.html</code>`;
+  }
+}
+
+async function loadLabels(){
+  const song = $('#song').value;
+  const a = await getJSON('/output/'+enc(song)+'/analysis.json');
+  // flatten every pattern label, prefer bass (clearest pitch demo) first
+  const order = ['bass','vocals','other','drums'];
+  const labels = [];
+  for(const stem of order)
+    for(const p of (a.layers[stem]||[])) labels.push({label:p.label, stem});
+  window._analysis = a;
+  $('#label').innerHTML = labels.map(l=>`<option value="${l.label}">${l.label} · ${l.stem}</option>`).join('');
+}
+
+function chordColors(chords){
+  const uniq = [...new Set(chords)];
+  const map = {};
+  uniq.forEach((c,i)=>{ map[c] = `hsl(${Math.round(i*360/uniq.length)} 70% 62%)`; });
+  return map;
+}
+
+function drawTimeline(a, label, info){
+  const stem = info.stem;
+  const layer = a.layers[stem].find(p=>p.label===label);
+  const dur = a.duration_sec;
+  const tl = $('#timeline'); tl.innerHTML='';
+  // collect bar chords across all occurrences for the legend
+  const allChords = [];
+  layer.occurrences.forEach(o=>{ for(let b=o.start_bar;b<=o.end_bar;b++) allChords.push(a.bars[b].chord); });
+  const colors = chordColors(allChords);
+
+  layer.occurrences.forEach(o=>{
+    const x = 100*o.start_sec/dur, w = Math.max(0.8, 100*(o.end_sec-o.start_sec)/dur);
+    const chord = a.bars[o.start_bar].chord;
+    const el = document.createElement('div');
+    el.className='occ'; el.style.left=x+'%'; el.style.width=w+'%';
+    el.style.background=colors[chord]||'#888';
+    el.title = `${chord} · ${o.start_sec.toFixed(1)}s`;
+    if(w>4) el.textContent = chord;
+    tl.appendChild(el);
+  });
+  // pins for source + target bars
+  [['src',info.source_bar,info.source_chord,'took the sound from here'],
+   ['tgt',info.target_bar,info.target_chord,'dropped it here']].forEach(([cls,bar,chord,txt])=>{
+    const bt = a.bars[bar];
+    const x = 100*((bt.start_sec+bt.end_sec)/2)/dur;
+    const m = document.createElement('div'); m.className='marker'; m.style.left=x+'%'; tl.appendChild(m);
+    const pin = document.createElement('div'); pin.className='pin '+cls;
+    pin.style.left=x+'%'; pin.style.top = cls==='src'?'-2px':'50px';
+    pin.textContent = (cls==='src'?'⬆ ':'⬇ ')+chord; pin.title=txt; tl.appendChild(pin);
+  });
+  // legend
+  $('#legend').innerHTML = Object.entries(colors).map(([c,col])=>
+    `<span><i class="swatch" style="background:${col}"></i>${c}</span>`).join('')
+    + `<span class="muted">each color = a different musical "flavor" (chord)</span>`;
+  $('#tl-desc').textContent =
+    `Pattern "${label}" (${stem}) appears ${layer.occurrence_count} times across `+
+    `${dur.toFixed(0)}s. Orange = the spot we copied the sound FROM; green = the spot we snapped it TO.`;
+}
+
+function drawWheel(srcPc, tgtPc, shift){
+  const cv = $('#wheel'), g = cv.getContext('2d');
+  const W=280,H=280,cx=W/2,cy=H/2,R=104;
+  g.clearRect(0,0,W,H);
+  // ring
+  g.strokeStyle='#2a3140'; g.lineWidth=2; g.beginPath(); g.arc(cx,cy,R,0,7); g.stroke();
+  const pos = pc=>{ const ang = -Math.PI/2 + pc*2*Math.PI/12; return [cx+R*Math.cos(ang), cy+R*Math.sin(ang)]; };
+  // arrow src -> tgt
+  if(srcPc!=null && tgtPc!=null && srcPc!==tgtPc){
+    const [sx,sy]=pos(srcPc),[tx,ty]=pos(tgtPc);
+    g.strokeStyle='#7c9cff'; g.lineWidth=3; g.beginPath(); g.moveTo(sx,sy);
+    g.quadraticCurveTo(cx,cy,tx,ty); g.stroke();
+    const ang=Math.atan2(ty-cy,tx-cx);
+    g.fillStyle='#7c9cff'; g.beginPath();
+    g.moveTo(tx,ty); g.lineTo(tx-12*Math.cos(ang-0.4),ty-12*Math.sin(ang-0.4));
+    g.lineTo(tx-12*Math.cos(ang+0.4),ty-12*Math.sin(ang+0.4)); g.closePath(); g.fill();
+  }
+  // note dots
+  for(let pc=0;pc<12;pc++){
+    const [x,y]=pos(pc);
+    let fill='#1c2230', stroke='#3a4760', tcol='#9aa7b4', r=15;
+    if(pc===srcPc){ fill='#f0a35e'; stroke='#f0a35e'; tcol='#0b1020'; r=18; }
+    if(pc===tgtPc){ fill='#67d98b'; stroke='#67d98b'; tcol='#0b1020'; r=18; }
+    g.beginPath(); g.arc(x,y,r,0,7); g.fillStyle=fill; g.fill(); g.lineWidth=2; g.strokeStyle=stroke; g.stroke();
+    g.fillStyle=tcol; g.font='bold 12px system-ui'; g.textAlign='center'; g.textBaseline='middle';
+    g.fillText(NOTES[pc],x,y);
+  }
+  g.fillStyle='#9aa7b4'; g.font='11px system-ui';
+  g.fillText('12 musical "heights"',cx,cy-8); g.fillText('(one per piano-key name)',cx,cy+8);
+}
+
+function fillWheelCaption(info){
+  const s=info.source_root_pc, t=info.target_root_pc, sh=info.semitone_shift;
+  if(s==null || t==null){
+    $('#wheelcap').innerHTML = `<b>This is a drum pattern</b>, so there's no pitch to fix — drums
+      are about <i>rhythm</i>, not "height". We just re-time and re-level them instead.`;
+    return;
+  }
+  const dir = sh<0?'down':'up', n=Math.abs(sh);
+  $('#wheelcap').innerHTML = `Your raw sound sits at <b style="color:var(--sample)">${NOTES[s]}</b>.
+    The song at the target spot needs <b style="color:var(--snapped)">${NOTES[t]}</b>.
+    So we shifted the pitch <b>${dir} ${n} ${n===1?'step':'steps'}</b>
+    (a "step" = one key on a piano) — fully automatic.
+    <br><br><span class="muted small">The orange dot is where your sound started; the green dot is
+    where it needed to be; the arrow is the move we made.</span>`;
+}
+
+function fillAxes(info){
+  const s=info.source_root_pc, t=info.target_root_pc;
+  const pitch = (s==null||t==null) ? 'skipped (drums have no pitch)'
+    : `${NOTES[s]} → <b>${NOTES[t]}</b> (${info.semitone_shift>=0?'+':''}${info.semitone_shift} steps)`;
+  const axes = [
+    ['var(--snapped)','⏱️ Time','Stretched to fit the slot exactly',
+      `length → <b>${info.duration_sec}s</b> (matches this spot)`],
+    ['var(--sample)','🎵 Pitch','Moved to the right musical height',
+      pitch],
+    ['var(--original)','🔊 Level','Volume matched to the track',
+      `loudness → <b>${info.snapped_lufs}</b> (target ${info.target_lufs})`],
+    ['#c89bff','✂️ Edges','Smoothed so loops don\'t click',
+      `tiny fade in/out added`],
+  ];
+  $('#axes').innerHTML = axes.map(([c,name,desc,ba])=>`
+    <div class="axis">
+      <div class="name"><span class="dot" style="background:${c}"></span>${name}</div>
+      <div class="muted small">${desc}</div>
+      <div class="ba">${ba}</div>
+    </div>`).join('');
+}
+
+async function loadBuffer(name, url){
+  const r = await fetch(url); const ab = await r.arrayBuffer();
+  buffers[name] = await ctx.decodeAudioData(ab);
+}
+
+function drawWave(name){
+  const cv = document.querySelector(`canvas[data-wave="${name}"]`);
+  const buf = buffers[name]; if(!cv||!buf) return;
+  const g = cv.getContext('2d'), W=cv.width, H=cv.height;
+  g.clearRect(0,0,W,H);
+  const data = buf.getChannelData(0), step = Math.floor(data.length/W)||1, mid=H/2;
+  const col = {sample:'#f0a35e',original:'#5ec2f0',snapped:'#67d98b'}[name];
+  g.strokeStyle='#22303f'; g.beginPath(); g.moveTo(0,mid); g.lineTo(W,mid); g.stroke();
+  g.strokeStyle=col; g.lineWidth=1;
+  for(let x=0;x<W;x++){
+    let min=1,max=-1;
+    for(let i=0;i<step;i++){ const v=data[x*step+i]||0; if(v<min)min=v; if(v>max)max=v; }
+    g.beginPath(); g.moveTo(x,mid+min*mid*0.95); g.lineTo(x,mid+max*mid*0.95); g.stroke();
+  }
+}
+
+let playing=null;
+function playBuffer(name){
+  if(ctx.state==='suspended') ctx.resume();
+  const buf = buffers[name]; if(!buf) return;
+  if(playing){ try{playing.stop()}catch(e){} }
+  const src = ctx.createBufferSource(); src.buffer=buf; src.connect(ctx.destination);
+  src.start(); playing=src;
+}
+function playSequence(names){
+  if(ctx.state==='suspended') ctx.resume();
+  let t = ctx.currentTime+0.05;
+  names.forEach(n=>{
+    const buf=buffers[n]; if(!buf) return;
+    const src=ctx.createBufferSource(); src.buffer=buf; src.connect(ctx.destination);
+    src.start(t); t += buf.duration + 0.35;
+  });
+}
+
+async function run(){
+  const song=$('#song').value, label=$('#label').value;
+  $('#status').textContent='Snapping… (first run renders audio, ~1–2s)';
+  $('#run').disabled=true;
+  try{
+    const info = await getJSON(`/api/snap-preview?song=${encodeURIComponent(song)}&label=${encodeURIComponent(label)}`);
+    if(info.error) throw new Error(info.error);
+    last = info;
+    $('#results').classList.remove('hidden');
+    drawTimeline(window._analysis, label, info);
+    drawWheel(info.source_root_pc, info.target_root_pc, info.semitone_shift);
+    fillWheelCaption(info);
+    fillAxes(info);
+    // load + draw the three waveforms
+    await Promise.all(['sample','original','snapped'].map(n=>
+      loadBuffer(n, '/'+enc(info.paths[n])).then(()=>drawWave(n)).catch(()=>{})));
+    $('#status').textContent =
+      `Done: snapped "${label}" from bar ${info.source_bar} (${info.source_chord}) `+
+      `onto bar ${info.target_bar} (${info.target_chord}). Scroll to listen 👇`;
+  }catch(e){
+    $('#status').innerHTML = `<span style="color:#ffb4bc">Error: ${e.message}</span>`;
+  }finally{ $('#run').disabled=false; }
+}
+
+document.addEventListener('click', e=>{
+  const p = e.target.closest('[data-play]'); if(p) playBuffer(p.dataset.play);
+  if(e.target.id==='playAb') playSequence(['sample','original','snapped']);
+});
+$('#song').addEventListener('change', loadLabels);
+$('#run').addEventListener('click', run);
+loadSongs();
+</script>
+</body>
+</html>

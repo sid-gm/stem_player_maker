@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Generated audio + virtualenv (large; recreated by the pipeline)
+test-harness/.venv/
+test-harness/output/
+test-harness/uploads/
+
+# Input songs — large and often copyrighted; bring your own
+*.mp3
+*.m4a
+*.wav

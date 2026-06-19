@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Stem Analyzer — DAW Visualizer</title>
+<style>
+  :root {
+    --bg: #1b1d22;
+    --panel: #24272e;
+    --panel2: #2b2f37;
+    --line: #3a3f49;
+    --beat: #34394330;
+    --downbeat: #5a627240;
+    --text: #e6e8ec;
+    --muted: #8b919c;
+    --accent: #4ea1ff;
+    --ruler-h: 64px;
+    --lane-h: 76px;
+    --head-w: 200px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  }
+
+  /* Transport / header */
+  .transport {
+    display: flex; align-items: center; gap: 18px;
+    padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
+    flex: 0 0 auto;
+  }
+  .transport button {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px;
+  }
+  .transport button:hover { border-color: var(--accent); }
+  .transport button.primary { background: var(--accent); border-color: var(--accent); color: #061018; font-weight: 600; }
+  .transport button:disabled { opacity: .45; cursor: not-allowed; border-color: var(--line); }
+  .medley-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .medley-list:empty::before { content: "no parts queued — pick a part, choose a sound, then ➕ Add to medley"; color: var(--muted); font-size: 12px; }
+  .medley-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+    background: var(--panel2); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 6px; padding: 3px 6px 3px 8px; }
+  .medley-chip b { font-variant-numeric: tabular-nums; }
+  .medley-chip .src { color: var(--muted); }
+  .medley-chip button { background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 0 2px; }
+  .medley-chip button:hover { color: #ff6b6b; }
+  .trim-panel { display: flex; gap: 18px; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .trim-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .trim-col .lbl b { color: var(--text); text-transform: none; letter-spacing: 0; font-size: 13px; }
+  .wave-wrap { position: relative; height: 64px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .wave-wrap canvas { display: block; width: 100%; height: 100%; }
+  .trim-shade { position: absolute; top: 0; bottom: 0; background: rgba(5,8,16,.6); pointer-events: none; }
+  .trim-handle { position: absolute; top: 0; bottom: 0; width: 9px; margin-left: -5px; cursor: ew-resize;
+    background: var(--accent); opacity: .9; border-radius: 2px; touch-action: none; }
+  .trim-handle::after { content: ""; position: absolute; top: 50%; left: 3px; width: 3px; height: 20px;
+    transform: translateY(-50%); background: #061018; border-radius: 2px; }
+  .trim-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 12px; }
+  .trim-actions { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 11px; }
+  .meta { display: flex; gap: 16px; align-items: baseline; }
+  .meta .big { font-size: 15px; font-weight: 600; }
+  .meta .lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .meta .val { font-variant-numeric: tabular-nums; }
+  .spacer { flex: 1 1 auto; }
+  .time { font-variant-numeric: tabular-nums; font-size: 14px; }
+  .zoom { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .sens { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .sens button { background: var(--panel2); color: var(--muted); border: 1px solid var(--line);
+                 border-radius: 5px; padding: 4px 9px; cursor: pointer; font-size: 12px; }
+  .sens button:hover { border-color: var(--accent); }
+  .sens button.on { background: var(--accent); border-color: var(--accent); color: #061018; font-weight: 600; }
+  #songSel { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; max-width: 200px; }
+
+  /* Body: fixed track headers + scrolling timeline */
+  .body { flex: 1 1 auto; display: flex; min-height: 0; }
+  .headers { width: var(--head-w); flex: 0 0 auto; background: var(--panel); border-right: 1px solid var(--line); overflow: hidden; }
+  .head-spacer { height: var(--ruler-h); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 12px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  .track-head {
+    height: var(--lane-h); border-bottom: 1px solid var(--line);
+    padding: 8px 12px; display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  }
+  .track-head .name { font-weight: 600; text-transform: capitalize; }
+  .track-head .sub { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .track-head .ctrls { display: flex; gap: 6px; align-items: center; }
+  .track-head .ctrls button {
+    width: 22px; height: 20px; border-radius: 4px; border: 1px solid var(--line);
+    background: var(--panel2); color: var(--muted); cursor: pointer; font-size: 11px; font-weight: 700; padding: 0;
+  }
+  .track-head .ctrls button.on.m { background: #c8553d; border-color: #c8553d; color: #fff; }
+  .track-head .ctrls button.on.s { background: #d8a514; border-color: #d8a514; color: #161616; }
+  .track-head input[type=range] { width: 70px; accent-color: var(--accent); }
+
+  .scroll { flex: 1 1 auto; overflow-x: auto; overflow-y: hidden; position: relative; }
+  .timeline { position: relative; height: 100%; }
+
+  .ruler { height: var(--ruler-h); position: relative; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .sections { position: absolute; top: 0; left: 0; right: 0; height: 24px; }
+  .section { position: absolute; top: 0; height: 24px; border-right: 1px solid #00000055; display: flex; align-items: center; padding: 0 6px; font-size: 11px; font-weight: 600; color: #0a0e14; overflow: hidden; white-space: nowrap; }
+  .ticks { position: absolute; top: 24px; left: 0; right: 0; bottom: 0; }
+  .tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line); }
+  .tick.bar { border-left-color: #4a505c; }
+  .tick span { position: absolute; top: 2px; left: 3px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .lane { height: var(--lane-h); border-bottom: 1px solid var(--line); position: relative; }
+  .lane canvas { display: block; width: 100%; height: 100%; }
+
+  .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); pointer-events: none; z-index: 5; left: 0; }
+  .playhead::before { content: ""; position: absolute; top: 0; left: -4px; border: 5px solid transparent; border-top-color: var(--accent); }
+
+  .legend { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 11px; }
+  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: -1px; }
+
+  .drop-hint { position: fixed; inset: 0; background: #000a; display: none; align-items: center; justify-content: center; font-size: 18px; z-index: 100; }
+  .toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 8px 14px; border-radius: 8px; color: var(--muted); z-index: 90; max-width: 80vw; }
+  #fileRow { display: flex; gap: 8px; align-items: center; }
+  #fileRow input[type=text] { background: var(--panel2); border: 1px solid var(--line); color: var(--text); padding: 6px 8px; border-radius: 6px; width: 320px; }
+
+  /* aux (non-stem) lanes: chords */
+  .track-head.aux { flex-direction: row; align-items: center; gap: 8px; }
+  .track-head.aux .name { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .lane.aux { background: var(--panel); }
+
+  /* per-layer pattern bands (top of each stem lane) + occurrence highlights */
+  .pat-seg { position: absolute; top: 0; height: 15px; line-height: 15px;
+             font: 700 9px/15px -apple-system, sans-serif; color: #0a0e14; text-align: center;
+             overflow: hidden; white-space: nowrap; cursor: pointer; border-right: 1px solid #0006;
+             opacity: .82; z-index: 3; }
+  .pat-seg:hover { opacity: 1; box-shadow: inset 0 0 0 1px #fff9; }
+  .pat-seg.sel  { opacity: 1; box-shadow: inset 0 0 0 2px #fff; }
+  .pat-hi { position: absolute; top: 15px; bottom: 0; background: #ffffff12;
+            border-left: 2px solid #fff; border-right: 2px solid #fff; pointer-events: none; z-index: 2; }
+</style>
+</head>
+<body>
+  <div class="transport">
+    <button id="playBtn" class="primary">▶ Play</button>
+    <button id="stopBtn">■ Stop</button>
+    <div class="time"><span id="cur">0:00.0</span> / <span id="dur">0:00.0</span></div>
+    <div class="meta">
+      <div><div class="lbl">Tempo</div><div class="val big" id="mTempo">–</div></div>
+      <div><div class="lbl">Key</div><div class="val big" id="mKey">–</div></div>
+      <div><div class="lbl">Meter</div><div class="val big" id="mMeter">–</div></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="legend" id="legend"></div>
+    <div class="sens">sensitivity
+      <button data-s="low">Low</button><button data-s="medium" class="on">Med</button><button data-s="high">High</button>
+    </div>
+    <div class="zoom">zoom <input id="zoom" type="range" min="4" max="60" value="14" /></div>
+  </div>
+
+  <div id="fileRow" class="transport" style="border-top:none;padding-top:0;">
+    <button id="uploadBtn" class="primary">⬆ Upload song</button>
+    <input id="fileInput" type="file" accept="audio/*" style="display:none" />
+    <select id="songSel" title="Processed songs"><option value="">— songs —</option></select>
+    <span class="lbl" style="color:var(--muted)">analysis.json</span>
+    <input id="path" type="text" value="output/Drake high fives/analysis.json" />
+    <button id="loadBtn">Load</button>
+    <span class="spacer"></span>
+    <span id="status" class="lbl" style="color:var(--muted)"></span>
+  </div>
+
+  <div id="replaceRow" class="transport" style="border-top:none;padding-top:0;display:none;">
+    <span class="lbl">Replace part</span>
+    <span id="replaceTarget" class="val big" style="color:var(--accent)">–</span>
+    <button id="sampleBtn">Choose sound…</button>
+    <input id="sampleInput" type="file" accept="audio/*" style="display:none" />
+    <span id="sampleName" class="lbl">no sound chosen</span>
+    <button id="addMedleyBtn" disabled>➕ Add to medley</button>
+    <button id="renderBtn" class="primary" disabled>⟳ Render this part only</button>
+    <span id="renderStatus" class="lbl" style="color:var(--muted)"></span>
+    <span class="spacer"></span>
+    <audio id="renderAudio" controls style="display:none;height:34px;"></audio>
+  </div>
+
+  <div id="trimPanel" class="trim-panel" style="display:none;">
+    <div class="trim-col">
+      <span class="lbl">Current part · <b id="trimCurLabel">–</b></span>
+      <div class="wave-wrap"><canvas id="curWave"></canvas></div>
+    </div>
+    <div class="trim-col">
+      <span class="lbl">New sound · <b id="trimNewLabel">–</b>
+        <span id="trimDur" style="color:var(--muted);text-transform:none;letter-spacing:0;"></span></span>
+      <div class="wave-wrap" id="newWaveWrap">
+        <canvas id="newWave"></canvas>
+        <div id="trimShadeL" class="trim-shade"></div>
+        <div id="trimShadeR" class="trim-shade"></div>
+        <div id="trimHandleS" class="trim-handle"></div>
+        <div id="trimHandleE" class="trim-handle"></div>
+        <div id="newWaveEmpty" class="trim-empty">choose a sound to see + trim its waveform</div>
+      </div>
+      <div class="trim-actions">
+        <button id="trimPlay" disabled>▶ Preview selection</button>
+        <button id="trimReset" disabled>Reset trim</button>
+        <span class="lbl" style="text-transform:none;letter-spacing:0;">drag the blue handles to trim — only the selection is used</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="medleyRow" class="transport" style="border-top:none;padding-top:0;">
+    <span class="lbl">Medley</span>
+    <span id="medleyList" class="medley-list"></span>
+    <span class="spacer"></span>
+    <button id="medleyBtn" class="primary" disabled>🎚 Render medley</button>
+    <button id="medleyClear" disabled>Clear</button>
+    <span id="medleyStatus" class="lbl" style="color:var(--muted)"></span>
+  </div>
+
+  <div class="body">
+    <div class="headers" id="headers">
+      <div class="head-spacer">Tracks</div>
+    </div>
+    <div class="scroll" id="scroll">
+      <div class="timeline" id="timeline">
+        <div class="ruler" id="ruler">
+          <div class="sections" id="sectionsEl"></div>
+          <div class="ticks" id="ticksEl"></div>
+        </div>
+        <div id="lanes"></div>
+        <div class="playhead" id="playhead"></div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="drop-hint" id="dropHint">Drop a song (audio) to process — or an analysis.json to view</div>
+
+<script>
+"use strict";
+
+const SECTION_COLORS = {
+  A: "#4ea1ff", B: "#57c785", C: "#e0a32e", D: "#c85cc8",
+  E: "#e0653e", F: "#3ec8c8", G: "#b06be0", H: "#9aa0aa",
+};
+const STEM_COLORS = {
+  vocals: "#ff6b9d", drums: "#ffb648", bass: "#4ea1ff", other: "#57c785",
+  guitar: "#c85cc8", piano: "#9aa0aa",
+};
+const PAT_PALETTE = ["#4ea1ff", "#57c785", "#e0a32e", "#c85cc8", "#e0653e",
+                     "#3ec8c8", "#b06be0", "#d8a514", "#7a8cff", "#5ad19a"];
+const patColor = (label) => {
+  const n = parseInt(String(label).replace(/\D/g, ""), 10) || 1;
+  return PAT_PALETTE[(n - 1) % PAT_PALETTE.length];
+};
+
+const state = {
+  data: null,
+  pps: 14,            // pixels per second (zoom)
+  audioCtx: null,
+  master: null,
+  buffers: {},        // type -> AudioBuffer
+  refBuffers: {},     // reference-clip path -> AudioBuffer (preview cache)
+  refSrc: null,       // looping source for the selected pattern's preview clip
+  tracks: [],         // [{type, lufs, path, muted, solo, gain, vol, canvas}]
+  playing: false,
+  ctxStart: 0,        // audioCtx.currentTime when playback began
+  offset: 0,          // playback position (sec) at ctxStart
+  raf: null,
+  sensitivity: "medium",
+  currentSong: null,  // server folder name, when loaded from output/
+  sampleFile: null,   // user's replacement sound (for /api/render)
+  medley: [],         // queued placements: [{label, stem, file}] for /api/render-medley
+  curBuf: null,       // AudioBuffer of the selected part's representative bar (current waveform)
+  newBuf: null,       // AudioBuffer of the chosen sound (new waveform + trim)
+  trim: { start: 0, end: 0 },  // selected region of newBuf, in seconds
+  trimSrc: null,      // buffer source for the "preview selection" playback
+};
+
+const $ = (id) => document.getElementById(id);
+const fmtTime = (s) => {
+  if (!isFinite(s)) s = 0;
+  const m = Math.floor(s / 60), sec = (s % 60);
+  return `${m}:${sec.toFixed(1).padStart(4, "0")}`;
+};
+const setStatus = (msg) => { $("status").textContent = msg; };
+
+/* ----------------------------------------------------------- loading */
+
+async function loadFromPath() {
+  const path = $("path").value.trim();
+  try {
+    setStatus("loading " + path + " …");
+    // no-store: re-enriching rewrites analysis.json, so never serve a stale cached copy
+    const res = await fetch(path, { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status + " " + res.statusText);
+    const json = await res.json();
+    json.__base = path.replace(/[^/]*$/, "");   // dir of the json
+    const m = path.match(/output\/(.+)\/analysis\.json$/);
+    state.currentSong = m ? m[1] : null;
+    ingest(json);
+  } catch (e) {
+    setStatus("could not fetch (" + e.message + "). Serve from test-harness/ or drag the file in.");
+  }
+}
+
+function loadFromFile(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try { const j = JSON.parse(r.result); j.__base = null; state.currentSong = null; ingest(j); }
+    catch (e) { setStatus("invalid JSON: " + e.message); }
+  };
+  r.readAsText(file);
+}
+
+/* ----------------------------------------------------------- backend: upload, songs, sensitivity */
+
+async function refreshSongs() {
+  try {
+    const songs = await (await fetch("/api/songs")).json();
+    $("songSel").innerHTML = `<option value="">— songs —</option>` +
+      songs.map((s) => `<option ${s === state.currentSong ? "selected" : ""}>${s}</option>`).join("");
+  } catch (e) { /* no backend (plain http.server) — leave dropdown empty */ }
+}
+
+async function uploadSong(file) {
+  setStatus(`uploading ${file.name} …`);
+  try {
+    const url = `/api/upload?name=${encodeURIComponent(file.name)}&sensitivity=${state.sensitivity}`;
+    const res = await fetch(url, { method: "POST", body: file });
+    if (!res.ok) throw new Error(await res.text());
+    pollJob((await res.json()).job, file.name);
+  } catch (e) {
+    setStatus("upload failed: " + e.message + " (is server.py running, not plain http.server?)");
+  }
+}
+
+function pollJob(job, name) {
+  const tick = setInterval(async () => {
+    let s;
+    try { s = await (await fetch("/api/status?job=" + job)).json(); }
+    catch (e) { return; }
+    if (s.state === "queued") setStatus(`queued: ${name} …`);
+    else if (s.state === "running") setStatus(`processing ${name}: ${s.step} … (this takes a few min)`);
+    else if (s.state === "done") {
+      clearInterval(tick);
+      state.currentSong = s.song;
+      $("path").value = s.json;
+      await loadFromPath();
+      await refreshSongs();
+      setStatus(`done: ${s.song}`);
+    } else if (s.state === "error") {
+      clearInterval(tick);
+      setStatus("processing error: " + s.error);
+    } else if (s.state === "unknown") {
+      clearInterval(tick);
+      setStatus("job lost (server restarted?)");
+    }
+  }, 1500);
+}
+
+function syncSensButtons() {
+  document.querySelectorAll(".sens button").forEach((b) =>
+    b.classList.toggle("on", b.dataset.s === state.sensitivity));
+}
+
+async function applySensitivity(level) {
+  state.sensitivity = level;
+  syncSensButtons();
+  if (!state.currentSong) {   // local/dragged file or no backend: applies to next upload only
+    setStatus(`sensitivity set to ${level} (applies on next upload)`);
+    return;
+  }
+  setStatus(`re-detecting patterns @ ${level} sensitivity …`);
+  try {
+    const res = await fetch("/api/enrich", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ song: state.currentSong, sensitivity: level }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    await loadFromPath();
+    setStatus(`patterns updated @ ${level} sensitivity`);
+  } catch (e) {
+    setStatus("re-detect failed: " + e.message);
+  }
+}
+
+/* ----------------------------------------------------------- ingest + layout */
+
+function ingest(data) {
+  stop();
+  state.data = data;
+  state.buffers = {};
+  state.tracks = (data.stems || []).map((s) => ({
+    type: s.type, lufs: s.loudness_lufs, path: s.path,
+    muted: false, solo: false, vol: 1, gain: null, canvas: null,
+  }));
+
+  if (data.sensitivity) state.sensitivity = data.sensitivity;
+  syncSensButtons();
+
+  $("mTempo").textContent = (data.tempo_bpm ?? "–") + " BPM";
+  $("mKey").textContent = data.key || "–";
+  $("mMeter").textContent = data.time_signature || "–";
+  $("dur").textContent = fmtTime(data.duration_sec || 0);
+  $("cur").textContent = "0:00.0";
+
+  buildLegend();
+  render();
+  setStatus(`loaded "${data.song_id}" — ${state.tracks.length} stems, ${(data.bars||[]).length} bars`);
+
+  // Try to load stem audio (works when page is served from test-harness/).
+  if (data.__base !== null) loadStems();
+  else setStatus($("status").textContent + " · audio playback needs the page served (see header path)");
+}
+
+function buildLegend() {
+  const loops = state.data.loops || [];
+  if (loops.length) {
+    $("legend").innerHTML = "parts: " + loops
+      .map((l) => `<span><i style="background:${SECTION_COLORS[l.label] || "#888"}"></i>${l.label} · ${l.role}</span>`)
+      .join("");
+  } else {
+    const labels = [...new Set((state.data.sections || []).map((s) => s.label))];
+    $("legend").innerHTML = "sections: " + labels
+      .map((l) => `<span><i style="background:${SECTION_COLORS[l] || "#888"}"></i>${l}</span>`)
+      .join("");
+  }
+}
+
+function render() {
+  const d = state.data;
+  if (!d) return;
+  const W = Math.max(1, (d.duration_sec || 0) * state.pps);
+  $("timeline").style.width = W + "px";
+
+  renderRuler(W);
+  renderHeaders();
+  renderLanes(W);
+  positionPlayhead(state.offset);
+}
+
+const AUX_H = 28;  // height of non-stem (chord) lanes; header rows match this
+function hasBarMeta() {
+  const b = (state.data.bars || [])[0];
+  return !!(b && b.chord);
+}
+
+function renderRuler(W) {
+  const d = state.data;
+  // ribbon: prefer the repetition map (loop instances); fall back to sections
+  const sEl = $("sectionsEl"); sEl.innerHTML = "";
+  let ribbon = [];
+  if ((d.loops || []).length) {
+    d.loops.forEach((l) => l.instances.forEach((inst) =>
+      ribbon.push({ label: l.label, role: l.role, start: inst.start_sec, end: inst.end_sec })));
+  } else {
+    ribbon = (d.sections || []).map((s) => ({ label: s.label, start: s.start_sec, end: s.end_sec }));
+  }
+  ribbon.forEach((s) => {
+    const el = document.createElement("div");
+    el.className = "section";
+    el.style.left = (s.start * state.pps) + "px";
+    el.style.width = ((s.end - s.start) * state.pps) + "px";
+    el.style.background = SECTION_COLORS[s.label] || "#888";
+    el.textContent = s.label;
+    el.title = `${s.label}${s.role ? " · " + s.role : ""}  ${s.start.toFixed(1)}–${s.end.toFixed(1)}s`;
+    sEl.appendChild(el);
+  });
+
+  // ticks: a labelled line per bar downbeat, plus second markers if zoomed in
+  const tEl = $("ticksEl"); tEl.innerHTML = "";
+  const bars = d.bars || [];
+  const labelEvery = state.pps < 8 ? 8 : state.pps < 16 ? 4 : 2;
+  bars.forEach((b, i) => {
+    const t = document.createElement("div");
+    t.className = "tick bar";
+    t.style.left = (b.start_sec * state.pps) + "px";
+    if (i % labelEvery === 0) {
+      const sp = document.createElement("span");
+      sp.textContent = (i + 1);
+      t.appendChild(sp);
+    }
+    tEl.appendChild(t);
+  });
+}
+
+function renderHeaders() {
+  const h = $("headers");
+  h.querySelectorAll(".track-head").forEach((n) => n.remove());
+
+  if (hasBarMeta()) {
+    const ch = document.createElement("div");
+    ch.className = "track-head aux";
+    ch.style.height = AUX_H + "px";
+    ch.innerHTML = `<div class="name">Chords</div>`;
+    h.appendChild(ch);
+  }
+
+  state.tracks.forEach((tr, idx) => {
+    const el = document.createElement("div");
+    el.className = "track-head";
+    const lufs = (tr.lufs == null) ? "silent" : tr.lufs.toFixed(1) + " LUFS";
+    el.innerHTML = `
+      <div class="name" style="color:${STEM_COLORS[tr.type] || "#ccc"}">${tr.type}</div>
+      <div class="ctrls">
+        <button class="m" title="Mute">M</button>
+        <button class="s" title="Solo">S</button>
+        <input type="range" min="0" max="1" step="0.01" value="${tr.vol}" title="Volume" />
+        <span class="sub">${lufs}</span>
+      </div>`;
+    const [mBtn, sBtn] = el.querySelectorAll("button");
+    const vol = el.querySelector("input");
+    tr._mBtn = mBtn; tr._sBtn = sBtn;
+    mBtn.classList.toggle("on", tr.muted);
+    sBtn.classList.toggle("on", tr.solo);
+    mBtn.onclick = () => { tr.muted = !tr.muted; mBtn.classList.toggle("on", tr.muted); applyGains(); };
+    sBtn.onclick = () => { tr.solo = !tr.solo; sBtn.classList.toggle("on", tr.solo); applyGains(); };
+    vol.oninput = () => { tr.vol = parseFloat(vol.value); applyGains(); };
+    h.appendChild(el);
+  });
+}
+
+function renderLanes(W) {
+  const lanes = $("lanes");
+  lanes.innerHTML = "";
+  const dpr = window.devicePixelRatio || 1;
+  const laneH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--lane-h"));
+  const mkCanvas = (lane, h) => {
+    const cv = document.createElement("canvas");
+    cv.width = Math.floor(W * dpr); cv.height = Math.floor(h * dpr);
+    lane.appendChild(cv); lanes.appendChild(lane);
+    return cv;
+  };
+
+  if (hasBarMeta()) {
+    const lane = document.createElement("div");
+    lane.className = "lane aux"; lane.style.height = AUX_H + "px";
+    drawChordLane(mkCanvas(lane, AUX_H));
+  }
+
+  state.tracks.forEach((tr) => {
+    const lane = document.createElement("div");
+    lane.className = "lane";
+    const cv = mkCanvas(lane, laneH);
+    tr.canvas = cv;
+    drawBeats(cv);
+    if (tr.type === "drums") drawDrumGrid(cv);
+    if (state.buffers[tr.type]) drawWaveform(tr);
+    else drawPlaceholder(tr);
+    drawInactiveOverlay(cv, tr.type);   // dim bars where this stem is silent
+    renderPatternBands(lane, tr.type);  // clickable per-layer pattern bands
+  });
+
+  if (state.sel) reapplyHighlights();
+}
+
+/* ----------------------------------------------------------- canvas drawing */
+
+function ctxOf(cv) {
+  const c = cv.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return c;
+}
+const cssW = (cv) => cv.width / (window.devicePixelRatio || 1);
+const cssH = (cv) => cv.height / (window.devicePixelRatio || 1);
+
+function drawBeats(cv) {
+  const c = ctxOf(cv), H = cssH(cv);
+  (state.data.beat_grid || []).forEach((b) => {
+    const x = b.time_sec * state.pps;
+    c.strokeStyle = b.is_downbeat ? "#5a627255" : "#3a3f4933";
+    c.lineWidth = b.is_downbeat ? 1.2 : 0.7;
+    c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke();
+  });
+}
+
+function drawPlaceholder(tr) {
+  const cv = tr.canvas, c = ctxOf(cv), H = cssH(cv);
+  c.fillStyle = (STEM_COLORS[tr.type] || "#888") + "22";
+  c.fillRect(0, H * 0.5 - 1, cssW(cv), 2);
+}
+
+function drawWaveform(tr) {
+  const cv = tr.canvas, c = ctxOf(cv);
+  const W = cssW(cv), H = cssH(cv), mid = H / 2;
+  const buf = state.buffers[tr.type];
+  const ch0 = buf.getChannelData(0);
+  const ch1 = buf.numberOfChannels > 1 ? buf.getChannelData(1) : ch0;
+  const N = ch0.length;
+  const color = STEM_COLORS[tr.type] || "#9aa0aa";
+  c.fillStyle = color + "cc";
+  const step = N / W;
+  for (let x = 0; x < W; x++) {
+    const s = Math.floor(x * step), e = Math.min(N, Math.floor((x + 1) * step));
+    let min = 1, max = -1;
+    for (let i = s; i < e; i++) {
+      const v = (ch0[i] + ch1[i]) * 0.5;
+      if (v < min) min = v; if (v > max) max = v;
+    }
+    const y1 = mid - max * (mid - 4);
+    const y2 = mid - min * (mid - 4);
+    c.fillRect(x, y1, 1, Math.max(1, y2 - y1));
+  }
+}
+
+function drawDrumGrid(cv) {
+  const c = ctxOf(cv), H = cssH(cv);
+  const pat = (state.data.patterns || {}).drums;
+  const bars = state.data.bars || [];
+  if (!pat || !pat.grid) return;
+  const spb = pat.steps_per_bar || 16;
+  const pad = 8, h = H - pad * 2;
+  pat.grid.forEach((steps, bi) => {
+    const bar = bars[bi]; if (!bar) return;
+    const bw = (bar.end_sec - bar.start_sec) * state.pps;
+    const sw = bw / spb;
+    const x0 = bar.start_sec * state.pps;
+    for (let s = 0; s < spb; s++) {
+      const x = x0 + s * sw;
+      if (steps[s]) {
+        c.fillStyle = STEM_COLORS.drums;
+        c.fillRect(x + 1, pad, Math.max(2, sw - 2), h);
+      } else {
+        c.fillStyle = "#ffffff08";
+        c.fillRect(x + 1, pad + h * 0.35, Math.max(2, sw - 2), h * 0.3);
+      }
+    }
+  });
+}
+
+function drawChordLane(cv) {
+  const c = ctxOf(cv), H = cssH(cv);
+  const bars = state.data.bars || [];
+  c.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
+  c.textAlign = "center"; c.textBaseline = "middle";
+  let prev = null;
+  bars.forEach((b, i) => {
+    const x = b.start_sec * state.pps, w = (b.end_sec - b.start_sec) * state.pps;
+    if (i % 2) { c.fillStyle = "#ffffff06"; c.fillRect(x, 0, w, H); }
+    c.strokeStyle = "#3a3f4955"; c.lineWidth = 0.7;
+    c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke();
+    const ch = b.chord || "";
+    if (w > 14) {
+      c.fillStyle = (ch !== prev) ? "#e6e8ec" : "#7d828c";  // highlight chord changes
+      c.fillText(ch, x + w / 2, H / 2 + 1);
+    }
+    prev = ch;
+  });
+}
+
+// Dim bars where this stem isn't part of the arrangement -> shows what's playing.
+function drawInactiveOverlay(cv, type) {
+  const bars = state.data.bars || [];
+  if (!bars.length || !bars[0].active_stems) return;
+  const c = ctxOf(cv), H = cssH(cv);
+  c.fillStyle = "#16181ccc";
+  bars.forEach((b) => {
+    if (!(b.active_stems || []).includes(type)) {
+      const x = b.start_sec * state.pps, w = (b.end_sec - b.start_sec) * state.pps;
+      c.fillRect(x, 0, w, H);
+    }
+  });
+}
+
+
+/* ------------------------------------------------- per-layer pattern bands */
+
+function renderPatternBands(lane, type) {
+  const pats = ((state.data.layers || {})[type]) || [];
+  pats.forEach((p) => {
+    p.occurrences.forEach((occ) => {
+      const seg = document.createElement("div");
+      const selected = state.sel && state.sel.stem === type && state.sel.label === p.label;
+      seg.className = "pat-seg" + (selected ? " sel" : "");
+      seg.style.left = (occ.start_sec * state.pps) + "px";
+      seg.style.width = Math.max(3, (occ.end_sec - occ.start_sec) * state.pps) + "px";
+      seg.style.background = patColor(p.label);
+      seg.title = `${type} ${p.label} · ${p.occurrence_count}× · click to tour all occurrences`;
+      if ((occ.end_sec - occ.start_sec) * state.pps > 16) seg.textContent = p.label;
+      seg.onclick = (e) => { e.stopPropagation(); selectPattern(type, p.label); };
+      lane.appendChild(seg);
+    });
+  });
+}
+
+function reapplyHighlights() {
+  document.querySelectorAll(".pat-hi").forEach((n) => n.remove());
+  if (!state.sel) return;
+  const tr = state.tracks.find((t) => t.type === state.sel.stem);
+  if (!tr || !tr.canvas) return;
+  const lane = tr.canvas.parentElement;
+  const p = ((state.data.layers || {})[state.sel.stem] || []).find((x) => x.label === state.sel.label);
+  if (!p) return;
+  p.occurrences.forEach((occ) => {
+    const hi = document.createElement("div");
+    hi.className = "pat-hi";
+    hi.style.left = (occ.start_sec * state.pps) + "px";
+    hi.style.width = Math.max(3, (occ.end_sec - occ.start_sec) * state.pps) + "px";
+    lane.appendChild(hi);
+  });
+}
+
+function syncTrackButtons() {
+  state.tracks.forEach((tr) => {
+    if (tr._mBtn) tr._mBtn.classList.toggle("on", tr.muted);
+    if (tr._sBtn) tr._sBtn.classList.toggle("on", tr.solo);
+  });
+}
+
+function updateSelStatus() {
+  if (!state.sel) return;
+  const p = ((state.data.layers || {})[state.sel.stem] || []).find((x) => x.label === state.sel.label);
+  const n = p ? p.occurrence_count : 0;
+  const at = state.tour ? Math.min(state.tour.idx + 1, n) : "–";
+  setStatus(`${state.sel.stem} ${state.sel.label}: ${n} occurrences — touring ${at}/${n} (Esc to clear)`);
+}
+
+// Click a pattern -> solo its stem, highlight every occurrence, play through them.
+function selectPattern(stem, label) {
+  if (state.sel && state.sel.stem === stem && state.sel.label === label) {
+    clearSelection(true); pause(); return;
+  }
+  if (!state._prevSolo) state._prevSolo = state.tracks.map((t) => t.solo);
+  state.sel = { stem, label };
+  state.tracks.forEach((t) => { t.solo = (t.type === stem); });
+  syncTrackButtons(); applyGains();
+
+  const p = ((state.data.layers || {})[stem] || []).find((x) => x.label === label);
+  if (!p || !p.occurrences.length) return;
+  state.tour = { occs: p.occurrences.slice().sort((a, b) => a.start_sec - b.start_sec), idx: 0 };
+
+  render();  // redraw bands (selected styling) + occurrence highlights
+  pause();   // stop any full-mix playback; the preview clip takes over
+  state.offset = state.tour.occs[0].start_sec;
+  positionPlayhead(state.offset);
+  // Loop the isolated representative-bar clip — "this is the sound you'd replace".
+  // Falls back to the full-stem occurrence tour if the clip can't be fetched.
+  playReference(stem, label).then((ok) => { if (!ok) play(); });
+  showReplaceUI();
+  updateSelStatus();
+}
+
+// Loop the pattern's representative-bar preview clip (soloed to its stem).
+async function playReference(stem, label) {
+  stopReference();
+  state.curBuf = null; drawCurrentWave();   // clear stale current-part waveform
+  const song = currentSongName();
+  if (!song) return false;
+  let info;
+  try {
+    const r = await fetch(`/api/reference?song=${encodeURIComponent(song)}` +
+                          `&label=${encodeURIComponent(label)}`, { cache: "no-store" });
+    info = await r.json();
+    if (!r.ok || info.error) throw new Error(info.error || "reference failed");
+  } catch (e) { setStatus("preview unavailable (" + e.message + ")"); return false; }
+  try {
+    const ctx = ensureCtx();
+    if (ctx.state === "suspended") ctx.resume();
+    let buf = state.refBuffers[info.path];
+    if (!buf) {
+      const ab = await (await fetch(info.path, { cache: "no-store" })).arrayBuffer();
+      buf = await ctx.decodeAudioData(ab);
+      state.refBuffers[info.path] = buf;
+    }
+    state.curBuf = buf; drawCurrentWave();   // show the current part's waveform
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    src.connect(state.master);
+    src.start();
+    state.refSrc = src;
+    setStatus(`${stem} ${label}: looping bar ${info.representative_bar} ` +
+              `(${info.duration_sec}s) · ${info.occurrence_count}× in song · Esc to clear`);
+    return true;
+  } catch (e) { setStatus("preview decode failed (" + e.message + ")"); return false; }
+}
+
+function stopReference() {
+  if (state.refSrc) { try { state.refSrc.stop(); } catch (e) {} state.refSrc = null; }
+}
+
+// The song's server folder name (for /api endpoints), derived robustly.
+function currentSongName() {
+  if (state.currentSong) return state.currentSong;
+  const base = (state.data && state.data.__base) || "";
+  const m = base.match(/output\/([^/]+)\/?$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function clearSelection(restore) {
+  stopReference();
+  document.querySelectorAll(".pat-hi").forEach((n) => n.remove());
+  const had = state.sel;
+  state.sel = null; state.tour = null;
+  if (restore && state._prevSolo) {
+    state.tracks.forEach((t, i) => { t.solo = state._prevSolo[i]; });
+    state._prevSolo = null;
+    syncTrackButtons(); applyGains();
+  }
+  if (had) render();  // drop selected styling from bands
+  hideReplaceUI();
+}
+
+/* ------------------------------------------------- replace a part with your sound */
+
+// Reveal the "Replace part" row for the selected pattern (server songs only).
+function showReplaceUI() {
+  const row = $("replaceRow");
+  if (!row) return;
+  if (!state.sel || !currentSongName()) { row.style.display = "none"; return; }
+  $("replaceTarget").textContent = `${state.sel.stem} ${state.sel.label}`;
+  $("renderAudio").style.display = "none";   // hide any prior bounce
+  row.style.display = "flex";
+  // Raw placement preserves the sound bite, so any stem (incl. drums) is fair game.
+  $("renderStatus").textContent = state.sampleFile
+    ? `ready: drops ${state.sampleFile.name} (raw) into every "${state.sel.label}" slot`
+    : "choose a sound — it's placed raw (no stretch/pitch) at every occurrence";
+  $("renderBtn").disabled = !state.sampleFile;
+  $("addMedleyBtn").disabled = !state.sampleFile;
+  $("trimPanel").style.display = "flex";
+  drawCurrentWave();
+  layoutTrim();
+}
+
+function hideReplaceUI() {
+  const row = $("replaceRow");
+  if (row) row.style.display = "none";
+  $("trimPanel").style.display = "none";
+  stopTrimPreview();
+}
+
+// POST the sample to /api/render, then play the returned full-song bounce.
+async function renderReplacement() {
+  if (!state.sel) return;
+  const song = currentSongName();
+  if (!song) { $("renderStatus").textContent = "load a processed song first"; return; }
+  if (!state.sampleFile) { $("renderStatus").textContent = "choose a sound first"; return; }
+  const label = state.sel.label;
+  const sound = currentSoundFile();          // trimmed selection if set, else the raw file
+  stopReference(); pause(); stopTrimPreview();  // clear previews so the bounce plays alone
+  $("renderBtn").disabled = true;
+  $("renderStatus").textContent =
+    `rendering "${label}" with ${sound.name} … raw, every occurrence (~10–40s)`;
+  try {
+    const url = `/api/render?song=${encodeURIComponent(song)}` +
+                `&label=${encodeURIComponent(label)}` +
+                `&name=${encodeURIComponent(sound.name)}`;
+    const res = await fetch(url, { method: "POST", body: sound });
+    const info = await res.json();
+    if (!res.ok || info.error) throw new Error(info.error || "render failed");
+    playBounce(info, $("renderStatus"),
+      `done — your sound replaces ${info.slots_replaced} slots across the ${info.duration_sec}s song ▶`);
+  } catch (e) {
+    $("renderStatus").textContent = "render failed: " + e.message;
+  } finally {
+    $("renderBtn").disabled = !state.sampleFile;
+  }
+}
+
+/* ------------------------------------------------- messy medley (many parts) */
+
+// Drop the current part + chosen sound into the medley tray.
+function addToMedley() {
+  if (!state.sel || !state.sampleFile) return;
+  const { stem, label } = state.sel;
+  const sound = currentSoundFile();   // snapshot the trimmed selection at add-time
+  // Replace any existing entry for this same part (one sound per part).
+  state.medley = state.medley.filter((m) => m.label !== label);
+  state.medley.push({ label, stem, file: sound });
+  renderMedleyList();
+  $("renderStatus").textContent = `added ${stem} ${label} → ${sound.name} to the medley`;
+}
+
+function removeFromMedley(label) {
+  state.medley = state.medley.filter((m) => m.label !== label);
+  renderMedleyList();
+}
+
+function clearMedley() {
+  state.medley = [];
+  renderMedleyList();
+  $("medleyStatus").textContent = "";
+}
+
+function renderMedleyList() {
+  const list = $("medleyList");
+  list.innerHTML = "";
+  state.medley.forEach((m) => {
+    const chip = document.createElement("span");
+    chip.className = "medley-chip";
+    chip.style.borderLeftColor = (typeof patColor === "function") ? patColor(m.label) : "var(--accent)";
+    chip.innerHTML = `<b>${m.stem} ${m.label}</b> <span class="src">${m.file.name}</span>`;
+    const x = document.createElement("button");
+    x.textContent = "✕"; x.title = "remove";
+    x.onclick = () => removeFromMedley(m.label);
+    chip.appendChild(x);
+    list.appendChild(chip);
+  });
+  const has = state.medley.length > 0;
+  $("medleyBtn").disabled = !has;
+  $("medleyClear").disabled = !has;
+}
+
+// Upload each queued sound, then POST the placement list to /api/render-medley.
+async function renderMedley() {
+  const song = currentSongName();
+  if (!song) { $("medleyStatus").textContent = "load a processed song first"; return; }
+  if (!state.medley.length) return;
+  stopReference(); pause();
+  $("medleyBtn").disabled = true;
+  const n = state.medley.length;
+  $("medleyStatus").textContent = `uploading ${n} sound${n > 1 ? "s" : ""} …`;
+  try {
+    const placements = [];
+    for (const m of state.medley) {
+      const res = await fetch(`/api/sample?name=${encodeURIComponent(m.file.name)}`,
+                              { method: "POST", body: m.file });
+      const info = await res.json();
+      if (!res.ok || info.error) throw new Error(info.error || "sample upload failed");
+      placements.push({ label: m.label, sample_id: info.id });
+    }
+    $("medleyStatus").textContent = `rendering messy medley of ${n} parts … (~10–40s)`;
+    const res = await fetch("/api/render-medley", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ song, placements, name: "medley" }),
+    });
+    const info = await res.json();
+    if (!res.ok || info.error) throw new Error(info.error || "medley render failed");
+    playBounce(info, $("medleyStatus"),
+      `done — ${n} parts, ${info.slots_replaced} slots across the ${info.duration_sec}s song ▶`);
+  } catch (e) {
+    $("medleyStatus").textContent = "medley failed: " + e.message;
+  } finally {
+    $("medleyBtn").disabled = !state.medley.length;
+  }
+}
+
+// Play a bounce's returned mp3/wav in the shared bounce player and set a status line.
+function playBounce(info, statusEl, msg) {
+  const rel = info.paths.mp3 || info.paths.wav;
+  const a = $("renderAudio");
+  a.src = encodeURI(rel) + "?t=" + Date.now();   // cache-bust the overwritten bounce
+  a.style.display = "inline-block";
+  a.play().catch(() => {});
+  if (statusEl) statusEl.textContent = msg;
+}
+
+/* ------------------------------------------------- waveforms + trim the new sound */
+
+// Decode a File to an AudioBuffer (for waveform display + client-side trim).
+async function decodeFile(file) {
+  const ctx = ensureCtx();
+  return await ctx.decodeAudioData(await file.arrayBuffer());
+}
+
+// Mono Float32 view of an AudioBuffer (average channels).
+function bufToMono(buf) {
+  if (buf.numberOfChannels === 1) return buf.getChannelData(0);
+  const n = buf.length, out = new Float32Array(n);
+  for (let c = 0; c < buf.numberOfChannels; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < n; i++) out[i] += d[i];
+  }
+  for (let i = 0; i < n; i++) out[i] /= buf.numberOfChannels;
+  return out;
+}
+
+// Draw a min/max waveform of a mono Float32 array into a canvas.
+function drawWaveCanvas(cv, mono, color) {
+  if (!cv) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 300, h = cv.clientHeight || 64;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  if (!mono || !mono.length) return;
+  const mid = h / 2, step = mono.length / w;
+  g.strokeStyle = color || "#888"; g.lineWidth = 1; g.beginPath();
+  for (let x = 0; x < w; x++) {
+    let mn = 1, mx = -1;
+    const i0 = Math.floor(x * step), i1 = Math.min(mono.length, Math.floor((x + 1) * step));
+    for (let i = i0; i < i1; i++) { const v = mono[i]; if (v < mn) mn = v; if (v > mx) mx = v; }
+    if (i1 <= i0) { mn = 0; mx = 0; }
+    g.moveTo(x + 0.5, mid - mx * mid * 0.95);
+    g.lineTo(x + 0.5, mid - mn * mid * 0.95);
+  }
+  g.stroke();
+}
+
+// Redraw the "current part" waveform (the selected part's representative bar).
+function drawCurrentWave() {
+  $("trimCurLabel").textContent = state.sel ? `${state.sel.stem} ${state.sel.label}` : "–";
+  const color = state.sel ? (STEM_COLORS[state.sel.stem] || "#888") : "#888";
+  drawWaveCanvas($("curWave"), state.curBuf ? bufToMono(state.curBuf) : null, color);
+}
+
+// Position the trim shades + handles from state.trim over the new-sound waveform.
+function layoutTrim() {
+  const wrap = $("newWaveWrap");
+  if (!wrap) return;
+  const w = wrap.clientWidth;
+  const has = !!state.newBuf;
+  ["trimShadeL", "trimShadeR", "trimHandleS", "trimHandleE"].forEach((id) =>
+    $(id).style.display = has ? "block" : "none");
+  $("newWaveEmpty").style.display = has ? "none" : "flex";
+  $("trimPlay").disabled = !has;
+  $("trimReset").disabled = !has;
+  if (!has) { $("trimDur").textContent = ""; return; }
+  const dur = state.newBuf.duration || 1;
+  const sx = (state.trim.start / dur) * w, ex = (state.trim.end / dur) * w;
+  $("trimShadeL").style.left = "0px"; $("trimShadeL").style.width = sx + "px";
+  $("trimShadeR").style.left = ex + "px"; $("trimShadeR").style.width = Math.max(0, w - ex) + "px";
+  $("trimHandleS").style.left = sx + "px";
+  $("trimHandleE").style.left = ex + "px";
+  $("trimDur").textContent =
+    `${state.trim.start.toFixed(2)}–${state.trim.end.toFixed(2)}s of ${dur.toFixed(2)}s` +
+    ` (using ${(state.trim.end - state.trim.start).toFixed(2)}s)`;
+}
+
+// Decode + show the chosen sound; reset the trim region to the whole clip.
+async function loadNewSound(file) {
+  $("trimNewLabel").textContent = file.name;
+  state.newBuf = null;
+  layoutTrim();
+  try {
+    state.newBuf = await decodeFile(file);
+  } catch (e) {
+    $("trimDur").textContent = "(browser can't preview this format — the full sound will be used)";
+    return;
+  }
+  state.trim = { start: 0, end: state.newBuf.duration };
+  drawWaveCanvas($("newWave"), bufToMono(state.newBuf), "#ffb648");
+  layoutTrim();
+}
+
+function stopTrimPreview() {
+  if (state.trimSrc) { try { state.trimSrc.stop(); } catch (e) {} state.trimSrc = null; }
+}
+
+// Play just the selected region of the new sound.
+function previewTrim() {
+  if (!state.newBuf) return;
+  const ctx = ensureCtx();
+  if (ctx.state === "suspended") ctx.resume();
+  stopTrimPreview(); stopReference(); pause();
+  const src = ctx.createBufferSource();
+  src.buffer = state.newBuf; src.connect(state.master || ctx.destination);
+  const len = Math.max(0.02, state.trim.end - state.trim.start);
+  src.start(0, state.trim.start, len);
+  state.trimSrc = src;
+}
+
+// Drag the two trim handles (pointer events) to reshape state.trim.
+function initTrimDrag() {
+  const wrap = $("newWaveWrap");
+  let drag = null;
+  const onMove = (e) => {
+    if (!drag || !state.newBuf) return;
+    const r = wrap.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    const dur = state.newBuf.duration;
+    let t = frac * dur;
+    const gap = Math.min(0.02, dur * 0.02);
+    if (drag === "start") state.trim.start = Math.max(0, Math.min(t, state.trim.end - gap));
+    else state.trim.end = Math.min(dur, Math.max(t, state.trim.start + gap));
+    layoutTrim();
+  };
+  const onUp = () => {
+    drag = null;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  };
+  [["trimHandleS", "start"], ["trimHandleE", "end"]].forEach(([id, which]) =>
+    $(id).addEventListener("pointerdown", (e) => {
+      e.preventDefault(); drag = which;
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    }));
+}
+
+// Encode a mono Float32 array to a 16-bit PCM WAV Blob.
+function encodeWav(samples, sr) {
+  const n = samples.length, ab = new ArrayBuffer(44 + n * 2), dv = new DataView(ab);
+  const ws = (off, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)); };
+  ws(0, "RIFF"); dv.setUint32(4, 36 + n * 2, true); ws(8, "WAVE");
+  ws(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  ws(36, "data"); dv.setUint32(40, n * 2, true);
+  let off = 44;
+  for (let i = 0; i < n; i++) {
+    const v = Math.max(-1, Math.min(1, samples[i]));
+    dv.setInt16(off, v < 0 ? v * 0x8000 : v * 0x7fff, true); off += 2;
+  }
+  return new Blob([ab], { type: "audio/wav" });
+}
+
+// The sound to actually upload: the trimmed selection (if decoded), else the raw file.
+function currentSoundFile() {
+  if (!state.newBuf || !state.sampleFile) return state.sampleFile;
+  const mono = bufToMono(state.newBuf), sr = state.newBuf.sampleRate;
+  const s = Math.max(0, Math.floor(state.trim.start * sr));
+  const e = Math.min(mono.length, Math.ceil(state.trim.end * sr));
+  // No trim applied -> upload the original file untouched (cheapest, byte-exact).
+  if (s <= 0 && e >= mono.length) return state.sampleFile;
+  const blob = encodeWav(mono.subarray(s, Math.max(s + 1, e)), sr);
+  const base = state.sampleFile.name.replace(/\.[^.]+$/, "");
+  return new File([blob], base + "_trim.wav", { type: "audio/wav" });
+}
+
+/* ----------------------------------------------------------- audio */
+
+async function loadStems() {
+  const ctx = ensureCtx();
+  let ok = 0;
+  for (const tr of state.tracks) {
+    try {
+      const url = (state.data.__base || "") + tr.path.replace(/^.*stems\//, "stems/");
+      // prefer the path exactly as given (relative to harness root)
+      const res = await fetch(tr.path).catch(() => fetch(url));
+      if (!res || !res.ok) throw new Error("fetch failed");
+      const ab = await res.arrayBuffer();
+      state.buffers[tr.type] = await ctx.decodeAudioData(ab);
+      drawWaveform(tr);
+      drawInactiveOverlay(tr.canvas, tr.type);  // keep arrangement dimming on top
+      ok++;
+    } catch (e) { /* leave placeholder */ }
+  }
+  setStatus(ok ? `audio ready (${ok}/${state.tracks.length} stems) · click a colored pattern band on a track to tour it` :
+                 "stems not loaded — viz only (serve from test-harness/ for audio)");
+}
+
+function ensureCtx() {
+  if (!state.audioCtx) {
+    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    state.master = state.audioCtx.createGain();
+    state.master.connect(state.audioCtx.destination);
+  }
+  return state.audioCtx;
+}
+
+function anySolo() { return state.tracks.some((t) => t.solo); }
+function applyGains() {
+  const solo = anySolo();
+  state.tracks.forEach((tr) => {
+    const audible = solo ? tr.solo : !tr.muted;
+    if (tr.gain) tr.gain.gain.value = audible ? tr.vol : 0;
+  });
+}
+
+function play() {
+  if (!state.data || state.playing) return;
+  stopReference();   // full-mix playback supersedes the looping preview clip
+  const ra = $("renderAudio"); if (ra && !ra.paused) ra.pause();  // and the rendered bounce
+  const ctx = ensureCtx();
+  if (ctx.state === "suspended") ctx.resume();
+  if (Object.keys(state.buffers).length === 0) { setStatus("no audio loaded — playhead only"); playSilent(); return; }
+  state.sources = [];
+  state.tracks.forEach((tr) => {
+    const buf = state.buffers[tr.type]; if (!buf) return;
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const g = ctx.createGain(); tr.gain = g;
+    src.connect(g).connect(state.master);
+    src.start(0, Math.max(0, state.offset));
+    state.sources.push(src);
+  });
+  applyGains();
+  state.ctxStart = ctx.currentTime;
+  state.playing = true;
+  $("playBtn").textContent = "⏸ Pause";
+  loop();
+}
+
+// fallback playhead animation when no audio is available
+function playSilent() {
+  state.ctxStart = performance.now() / 1000;
+  state.playing = true; state.silent = true;
+  $("playBtn").textContent = "⏸ Pause";
+  loop();
+}
+
+function pause() {
+  stopReference();
+  if (!state.playing) return;
+  state.offset = currentTime();
+  if (state.sources) state.sources.forEach((s) => { try { s.stop(); } catch (e) {} });
+  state.sources = null;
+  state.playing = false; state.silent = false;
+  cancelAnimationFrame(state.raf);
+  $("playBtn").textContent = "▶ Play";
+}
+
+function stop() {
+  pause();
+  state.offset = 0;
+  positionPlayhead(0);
+  $("cur").textContent = "0:00.0";
+  if (state.sel) clearSelection(true);
+}
+
+function currentTime() {
+  if (!state.playing) return state.offset;
+  const now = state.silent ? performance.now() / 1000 : state.audioCtx.currentTime;
+  return state.offset + (now - state.ctxStart);
+}
+
+function loop() {
+  const t = currentTime();
+  const dur = state.data.duration_sec || 0;
+  if (state.tour) {
+    const occ = state.tour.occs[state.tour.idx];
+    if (occ && t >= occ.end_sec - 0.01) {
+      state.tour.idx++;
+      if (state.tour.idx >= state.tour.occs.length) { stop(); return; }
+      updateSelStatus();
+      pause();
+      state.offset = state.tour.occs[state.tour.idx].start_sec;  // jump to next occurrence
+      play();
+      return;
+    }
+  }
+  if (t >= dur) { stop(); return; }
+  positionPlayhead(t);
+  $("cur").textContent = fmtTime(t);
+  state.raf = requestAnimationFrame(loop);
+}
+
+function positionPlayhead(t) {
+  const x = t * state.pps;
+  $("playhead").style.left = x + "px";
+  // keep playhead in view
+  const sc = $("scroll");
+  if (state.playing && (x < sc.scrollLeft + 40 || x > sc.scrollLeft + sc.clientWidth - 40)) {
+    sc.scrollLeft = x - sc.clientWidth * 0.3;
+  }
+}
+
+function seekTo(sec) {
+  const wasPlaying = state.playing;
+  pause();
+  state.offset = Math.min(Math.max(0, sec), state.data.duration_sec || 0);
+  positionPlayhead(state.offset);
+  $("cur").textContent = fmtTime(state.offset);
+  const sc = $("scroll");
+  sc.scrollLeft = state.offset * state.pps - sc.clientWidth * 0.3;
+  if (wasPlaying) play();
+}
+
+function seekFromEvent(e) {
+  if (state.sel) clearSelection(true);   // a manual seek cancels a pattern tour
+  // getBoundingClientRect tracks the scrolled position, so offset is relative to content.
+  const rect = $("timeline").getBoundingClientRect();
+  seekTo((e.clientX - rect.left) / state.pps);
+}
+
+/* ----------------------------------------------------------- wiring */
+
+$("playBtn").onclick = () => (state.playing ? pause() : play());
+$("stopBtn").onclick = stop;
+$("loadBtn").onclick = loadFromPath;
+$("uploadBtn").onclick = () => $("fileInput").click();
+$("fileInput").onchange = (e) => { if (e.target.files[0]) uploadSong(e.target.files[0]); e.target.value = ""; };
+$("songSel").onchange = (e) => {
+  const s = e.target.value;
+  if (s) { state.currentSong = s; $("path").value = `output/${s}/analysis.json`; loadFromPath(); }
+};
+document.querySelectorAll(".sens button").forEach((b) =>
+  (b.onclick = () => applySensitivity(b.dataset.s)));
+$("sampleBtn").onclick = () => $("sampleInput").click();
+$("sampleInput").onchange = (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  state.sampleFile = f; $("sampleName").textContent = f.name;
+  showReplaceUI();
+  loadNewSound(f);   // decode for waveform + trim
+};
+$("renderBtn").onclick = renderReplacement;
+$("addMedleyBtn").onclick = addToMedley;
+$("medleyBtn").onclick = renderMedley;
+$("medleyClear").onclick = clearMedley;
+$("trimPlay").onclick = previewTrim;
+$("trimReset").onclick = () => {
+  if (!state.newBuf) return;
+  state.trim = { start: 0, end: state.newBuf.duration };
+  layoutTrim();
+};
+initTrimDrag();
+renderMedleyList();   // paint the empty tray + disabled state on load
+window.addEventListener("resize", () => {
+  if ($("trimPanel").style.display === "none") return;
+  drawCurrentWave();
+  if (state.newBuf) drawWaveCanvas($("newWave"), bufToMono(state.newBuf), "#ffb648");
+  layoutTrim();
+});
+$("zoom").oninput = (e) => {
+  const t = currentTime();
+  state.pps = parseInt(e.target.value, 10);
+  render();
+  positionPlayhead(t);
+};
+$("timeline").addEventListener("click", (e) => {
+  if (e.target.closest(".section")) return;  // let section title clicks pass
+  seekFromEvent(e);
+});
+
+// drag & drop: a .json loads directly; an audio file uploads + processes
+const hint = $("dropHint");
+window.addEventListener("dragover", (e) => { e.preventDefault(); hint.style.display = "flex"; });
+window.addEventListener("dragleave", (e) => { if (e.clientX === 0 && e.clientY === 0) hint.style.display = "none"; });
+window.addEventListener("drop", (e) => {
+  e.preventDefault(); hint.style.display = "none";
+  const files = [...e.dataTransfer.files];
+  const json = files.find((x) => x.name.endsWith(".json"));
+  const audio = files.find((x) => /\.(mp3|m4a|wav|flac|aac|ogg)$/i.test(x.name));
+  if (json) loadFromFile(json);
+  else if (audio) uploadSong(audio);
+});
+
+window.addEventListener("keydown", (e) => {
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);
+  if (typing) return;  // don't hijack keys while typing in the path/song fields
+  if (e.code === "Space") { e.preventDefault(); state.playing ? pause() : play(); }
+  if (e.code === "Escape" && state.sel) { clearSelection(true); pause(); }
+});
+
+// init
+refreshSongs();
+loadFromPath();
+</script>
+</body>
+</html>

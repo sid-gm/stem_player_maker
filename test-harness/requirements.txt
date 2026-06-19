@@ -1,0 +1,11 @@
+# Local validation harness deps. Python 3.11 (not 3.12+; some audio deps lag).
+# torch (with MPS on macOS) is pulled in transitively by demucs.
+# torchcodec: recent torchaudio routes save() through it (needs ffmpeg).
+demucs
+torchcodec
+soundfile
+numpy
+librosa
+scipy
+scikit-learn
+pyloudnorm
