@@ -15,7 +15,7 @@
     --text: #e6e8ec;
     --muted: #8b919c;
     --accent: #4ea1ff;
-    --ruler-h: 64px;
+    --ruler-h: 40px;
     --lane-h: 76px;
     --head-w: 200px;
   }
@@ -40,16 +40,22 @@
   .transport button:hover { border-color: var(--accent); }
   .transport button.primary { background: var(--accent); border-color: var(--accent); color: #061018; font-weight: 600; }
   .transport button:disabled { opacity: .45; cursor: not-allowed; border-color: var(--line); }
-  .medley-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  /* Medley: one stacked row per changed part (current part | new sound) */
+  .medley-section { padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
+    flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; }
+  .medley-head { display: flex; align-items: center; gap: 18px; }
+  .medley-list { display: flex; flex-direction: column; gap: 8px; align-items: stretch;
+    max-height: 240px; overflow-y: auto; }
   .medley-list:empty::before { content: "no parts queued — pick a part, choose a sound, then ➕ Add to medley"; color: var(--muted); font-size: 12px; }
-  .medley-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+  .medley-item { position: relative; display: flex; gap: 18px; align-items: stretch;
     background: var(--panel2); border: 1px solid var(--line); border-left: 3px solid var(--accent);
-    border-radius: 6px; padding: 3px 6px 3px 8px; }
-  .medley-chip b { font-variant-numeric: tabular-nums; }
-  .medley-chip .src { color: var(--muted); }
-  .medley-chip button { background: none; border: none; color: var(--muted); cursor: pointer;
-    font-size: 14px; line-height: 1; padding: 0 2px; }
-  .medley-chip button:hover { color: #ff6b6b; }
+    border-radius: 8px; padding: 8px 36px 8px 12px; }
+  .medley-item .trim-col { flex: 1 1 0; min-width: 0; gap: 4px; }
+  .medley-item .wave-wrap { height: 48px; }
+  .medley-item .lbl b { font-variant-numeric: tabular-nums; }
+  .medley-remove { position: absolute; top: 6px; right: 6px; background: none; border: none;
+    color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 4px; }
+  .medley-remove:hover { color: #ff6b6b; }
   .trim-panel { display: flex; gap: 18px; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
   .trim-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
   .trim-col .lbl b { color: var(--text); text-transform: none; letter-spacing: 0; font-size: 13px; }
@@ -60,21 +66,16 @@
     background: var(--accent); opacity: .9; border-radius: 2px; touch-action: none; }
   .trim-handle::after { content: ""; position: absolute; top: 50%; left: 3px; width: 3px; height: 20px;
     transform: translateY(-50%); background: #061018; border-radius: 2px; }
+  .trim-window { position: absolute; top: 0; bottom: 0; cursor: grab; touch-action: none;
+    border-top: 2px solid var(--accent); border-bottom: 2px solid var(--accent);
+    background: rgba(120,170,255,.07); }
+  .trim-window:active { cursor: grabbing; }
   .trim-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     color: var(--muted); font-size: 12px; }
   .trim-actions { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 11px; }
-  .meta { display: flex; gap: 16px; align-items: baseline; }
-  .meta .big { font-size: 15px; font-weight: 600; }
-  .meta .lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-  .meta .val { font-variant-numeric: tabular-nums; }
   .spacer { flex: 1 1 auto; }
   .time { font-variant-numeric: tabular-nums; font-size: 14px; }
   .zoom { display: flex; align-items: center; gap: 6px; color: var(--muted); }
-  .sens { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-  .sens button { background: var(--panel2); color: var(--muted); border: 1px solid var(--line);
-                 border-radius: 5px; padding: 4px 9px; cursor: pointer; font-size: 12px; }
-  .sens button:hover { border-color: var(--accent); }
-  .sens button.on { background: var(--accent); border-color: var(--accent); color: #061018; font-weight: 600; }
   #songSel { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; max-width: 200px; }
 
   /* Body: fixed track headers + scrolling timeline */
@@ -100,9 +101,7 @@
   .timeline { position: relative; height: 100%; }
 
   .ruler { height: var(--ruler-h); position: relative; border-bottom: 1px solid var(--line); background: var(--panel); }
-  .sections { position: absolute; top: 0; left: 0; right: 0; height: 24px; }
-  .section { position: absolute; top: 0; height: 24px; border-right: 1px solid #00000055; display: flex; align-items: center; padding: 0 6px; font-size: 11px; font-weight: 600; color: #0a0e14; overflow: hidden; white-space: nowrap; }
-  .ticks { position: absolute; top: 24px; left: 0; right: 0; bottom: 0; }
+  .ticks { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
   .tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line); }
   .tick.bar { border-left-color: #4a505c; }
   .tick span { position: absolute; top: 2px; left: 3px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -112,9 +111,6 @@
 
   .playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); pointer-events: none; z-index: 5; left: 0; }
   .playhead::before { content: ""; position: absolute; top: 0; left: -4px; border: 5px solid transparent; border-top-color: var(--accent); }
-
-  .legend { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 11px; }
-  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: -1px; }
 
   .drop-hint { position: fixed; inset: 0; background: #000a; display: none; align-items: center; justify-content: center; font-size: 18px; z-index: 100; }
   .toast { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--line); padding: 8px 14px; border-radius: 8px; color: var(--muted); z-index: 90; max-width: 80vw; }
@@ -135,6 +131,11 @@
   .pat-seg.sel  { opacity: 1; box-shadow: inset 0 0 0 2px #fff; }
   .pat-hi { position: absolute; top: 15px; bottom: 0; background: #ffffff12;
             border-left: 2px solid #fff; border-right: 2px solid #fff; pointer-events: none; z-index: 2; }
+  /* replaced-with-custom-sound slots, marked on the stem lane after a medley render */
+  .medley-hi { position: absolute; top: 0; bottom: 0; background: #ffb6481f;
+               border-left: 2px solid #ffb648; border-right: 2px solid #ffb648;
+               pointer-events: none; z-index: 3; }
+  .medley-hi::before { content: "🎚"; position: absolute; top: 1px; left: 2px; font-size: 9px; opacity: .85; }
 </style>
 </head>
 <body>
@@ -142,16 +143,7 @@
     <button id="playBtn" class="primary">▶ Play</button>
     <button id="stopBtn">■ Stop</button>
     <div class="time"><span id="cur">0:00.0</span> / <span id="dur">0:00.0</span></div>
-    <div class="meta">
-      <div><div class="lbl">Tempo</div><div class="val big" id="mTempo">–</div></div>
-      <div><div class="lbl">Key</div><div class="val big" id="mKey">–</div></div>
-      <div><div class="lbl">Meter</div><div class="val big" id="mMeter">–</div></div>
-    </div>
     <div class="spacer"></div>
-    <div class="legend" id="legend"></div>
-    <div class="sens">sensitivity
-      <button data-s="low">Low</button><button data-s="medium" class="on">Med</button><button data-s="high">High</button>
-    </div>
     <div class="zoom">zoom <input id="zoom" type="range" min="4" max="60" value="14" /></div>
   </div>
 
@@ -191,6 +183,7 @@
         <canvas id="newWave"></canvas>
         <div id="trimShadeL" class="trim-shade"></div>
         <div id="trimShadeR" class="trim-shade"></div>
+        <div id="trimWindow" class="trim-window"></div>
         <div id="trimHandleS" class="trim-handle"></div>
         <div id="trimHandleE" class="trim-handle"></div>
         <div id="newWaveEmpty" class="trim-empty">choose a sound to see + trim its waveform</div>
@@ -198,18 +191,21 @@
       <div class="trim-actions">
         <button id="trimPlay" disabled>▶ Preview selection</button>
         <button id="trimReset" disabled>Reset trim</button>
-        <span class="lbl" style="text-transform:none;letter-spacing:0;">drag the blue handles to trim — only the selection is used</span>
+        <span class="lbl" style="text-transform:none;letter-spacing:0;">drag the blue box to move it through the song · handles to trim · scroll to zoom</span>
       </div>
     </div>
   </div>
 
-  <div id="medleyRow" class="transport" style="border-top:none;padding-top:0;">
-    <span class="lbl">Medley</span>
-    <span id="medleyList" class="medley-list"></span>
-    <span class="spacer"></span>
-    <button id="medleyBtn" class="primary" disabled>🎚 Render medley</button>
-    <button id="medleyClear" disabled>Clear</button>
-    <span id="medleyStatus" class="lbl" style="color:var(--muted)"></span>
+  <div id="medleyRow" class="medley-section">
+    <div class="medley-head">
+      <span class="lbl">Medley</span>
+      <span class="spacer"></span>
+      <button id="medleyBtn" class="primary" disabled>🎚 Render medley</button>
+      <button id="medleyClear" disabled>Clear</button>
+      <button id="revertBtn" style="display:none">↩ Revert mix</button>
+      <span id="medleyStatus" class="lbl" style="color:var(--muted)"></span>
+    </div>
+    <div id="medleyList" class="medley-list"></div>
   </div>
 
   <div class="body">
@@ -219,7 +215,6 @@
     <div class="scroll" id="scroll">
       <div class="timeline" id="timeline">
         <div class="ruler" id="ruler">
-          <div class="sections" id="sectionsEl"></div>
           <div class="ticks" id="ticksEl"></div>
         </div>
         <div id="lanes"></div>
@@ -234,10 +229,6 @@
 <script>
 "use strict";
 
-const SECTION_COLORS = {
-  A: "#4ea1ff", B: "#57c785", C: "#e0a32e", D: "#c85cc8",
-  E: "#e0653e", F: "#3ec8c8", G: "#b06be0", H: "#9aa0aa",
-};
 const STEM_COLORS = {
   vocals: "#ff6b9d", drums: "#ffb648", bass: "#4ea1ff", other: "#57c785",
   guitar: "#c85cc8", piano: "#9aa0aa",
@@ -265,11 +256,15 @@ const state = {
   sensitivity: "medium",
   currentSong: null,  // server folder name, when loaded from output/
   sampleFile: null,   // user's replacement sound (for /api/render)
-  medley: [],         // queued placements: [{label, stem, file}] for /api/render-medley
+  medley: [],         // queued placements: [{label, stem, file, curMono, newMono}] for /api/render-medley
   curBuf: null,       // AudioBuffer of the selected part's representative bar (current waveform)
   newBuf: null,       // AudioBuffer of the chosen sound (new waveform + trim)
   trim: { start: 0, end: 0 },  // selected region of newBuf, in seconds
+  view: { start: 0, end: 0 },  // visible (zoomed) time window of newBuf, in seconds
   trimSrc: null,      // buffer source for the "preview selection" playback
+  origBuffers: null,  // snapshot of the original stem buffers while a medley is loaded
+  medleyHL: [],       // [{stem, label}] replaced slots to mark on the timeline
+  bounce: null,       // last rendered medley info (for download)
 };
 
 const $ = (id) => document.getElementById(id);
@@ -354,73 +349,32 @@ function pollJob(job, name) {
   }, 1500);
 }
 
-function syncSensButtons() {
-  document.querySelectorAll(".sens button").forEach((b) =>
-    b.classList.toggle("on", b.dataset.s === state.sensitivity));
-}
-
-async function applySensitivity(level) {
-  state.sensitivity = level;
-  syncSensButtons();
-  if (!state.currentSong) {   // local/dragged file or no backend: applies to next upload only
-    setStatus(`sensitivity set to ${level} (applies on next upload)`);
-    return;
-  }
-  setStatus(`re-detecting patterns @ ${level} sensitivity …`);
-  try {
-    const res = await fetch("/api/enrich", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ song: state.currentSong, sensitivity: level }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    await loadFromPath();
-    setStatus(`patterns updated @ ${level} sensitivity`);
-  } catch (e) {
-    setStatus("re-detect failed: " + e.message);
-  }
-}
-
 /* ----------------------------------------------------------- ingest + layout */
 
 function ingest(data) {
   stop();
   state.data = data;
   state.buffers = {};
+  state.origBuffers = null;   // any loaded medley belongs to the previous song
+  state.medleyHL = [];
+  state.bounce = null;
+  showRevert(false);
   state.tracks = (data.stems || []).map((s) => ({
     type: s.type, lufs: s.loudness_lufs, path: s.path,
     muted: false, solo: false, vol: 1, gain: null, canvas: null,
   }));
 
   if (data.sensitivity) state.sensitivity = data.sensitivity;
-  syncSensButtons();
 
-  $("mTempo").textContent = (data.tempo_bpm ?? "–") + " BPM";
-  $("mKey").textContent = data.key || "–";
-  $("mMeter").textContent = data.time_signature || "–";
   $("dur").textContent = fmtTime(data.duration_sec || 0);
   $("cur").textContent = "0:00.0";
 
-  buildLegend();
   render();
   setStatus(`loaded "${data.song_id}" — ${state.tracks.length} stems, ${(data.bars||[]).length} bars`);
 
   // Try to load stem audio (works when page is served from test-harness/).
   if (data.__base !== null) loadStems();
   else setStatus($("status").textContent + " · audio playback needs the page served (see header path)");
-}
-
-function buildLegend() {
-  const loops = state.data.loops || [];
-  if (loops.length) {
-    $("legend").innerHTML = "parts: " + loops
-      .map((l) => `<span><i style="background:${SECTION_COLORS[l.label] || "#888"}"></i>${l.label} · ${l.role}</span>`)
-      .join("");
-  } else {
-    const labels = [...new Set((state.data.sections || []).map((s) => s.label))];
-    $("legend").innerHTML = "sections: " + labels
-      .map((l) => `<span><i style="background:${SECTION_COLORS[l] || "#888"}"></i>${l}</span>`)
-      .join("");
-  }
 }
 
 function render() {
@@ -443,26 +397,6 @@ function hasBarMeta() {
 
 function renderRuler(W) {
   const d = state.data;
-  // ribbon: prefer the repetition map (loop instances); fall back to sections
-  const sEl = $("sectionsEl"); sEl.innerHTML = "";
-  let ribbon = [];
-  if ((d.loops || []).length) {
-    d.loops.forEach((l) => l.instances.forEach((inst) =>
-      ribbon.push({ label: l.label, role: l.role, start: inst.start_sec, end: inst.end_sec })));
-  } else {
-    ribbon = (d.sections || []).map((s) => ({ label: s.label, start: s.start_sec, end: s.end_sec }));
-  }
-  ribbon.forEach((s) => {
-    const el = document.createElement("div");
-    el.className = "section";
-    el.style.left = (s.start * state.pps) + "px";
-    el.style.width = ((s.end - s.start) * state.pps) + "px";
-    el.style.background = SECTION_COLORS[s.label] || "#888";
-    el.textContent = s.label;
-    el.title = `${s.label}${s.role ? " · " + s.role : ""}  ${s.start.toFixed(1)}–${s.end.toFixed(1)}s`;
-    sEl.appendChild(el);
-  });
-
   // ticks: a labelled line per bar downbeat, plus second markers if zoomed in
   const tEl = $("ticksEl"); tEl.innerHTML = "";
   const bars = d.bars || [];
@@ -495,14 +429,12 @@ function renderHeaders() {
   state.tracks.forEach((tr, idx) => {
     const el = document.createElement("div");
     el.className = "track-head";
-    const lufs = (tr.lufs == null) ? "silent" : tr.lufs.toFixed(1) + " LUFS";
     el.innerHTML = `
       <div class="name" style="color:${STEM_COLORS[tr.type] || "#ccc"}">${tr.type}</div>
       <div class="ctrls">
         <button class="m" title="Mute">M</button>
         <button class="s" title="Solo">S</button>
         <input type="range" min="0" max="1" step="0.01" value="${tr.vol}" title="Volume" />
-        <span class="sub">${lufs}</span>
       </div>`;
     const [mBtn, sBtn] = el.querySelectorAll("button");
     const vol = el.querySelector("input");
@@ -537,6 +469,7 @@ function renderLanes(W) {
   state.tracks.forEach((tr) => {
     const lane = document.createElement("div");
     lane.className = "lane";
+    lane.dataset.stem = tr.type;         // so medley marks can find this lane
     const cv = mkCanvas(lane, laneH);
     tr.canvas = cv;
     drawBeats(cv);
@@ -548,6 +481,26 @@ function renderLanes(W) {
   });
 
   if (state.sel) reapplyHighlights();
+  if (state.medleyHL.length) drawMedleyHighlights();   // mark replaced slots
+}
+
+// Mark every replaced slot (each occurrence of a medley'd part) on its stem lane,
+// so you can see at a glance which parts on the timeline now carry a custom sound.
+function drawMedleyHighlights() {
+  document.querySelectorAll(".medley-hi").forEach((n) => n.remove());
+  state.medleyHL.forEach(({ stem, label }) => {
+    const lane = document.querySelector(`.lane[data-stem="${stem}"]`);
+    const p = ((state.data.layers || {})[stem] || []).find((x) => x.label === label);
+    if (!lane || !p) return;
+    p.occurrences.forEach((occ) => {
+      const hi = document.createElement("div");
+      hi.className = "medley-hi";
+      hi.style.left = (occ.start_sec * state.pps) + "px";
+      hi.style.width = Math.max(3, (occ.end_sec - occ.start_sec) * state.pps) + "px";
+      hi.title = `${stem} ${label} — custom sound`;
+      lane.appendChild(hi);
+    });
+  });
 }
 
 /* ----------------------------------------------------------- canvas drawing */
@@ -628,20 +581,11 @@ function drawDrumGrid(cv) {
 function drawChordLane(cv) {
   const c = ctxOf(cv), H = cssH(cv);
   const bars = state.data.bars || [];
-  c.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
-  c.textAlign = "center"; c.textBaseline = "middle";
-  let prev = null;
   bars.forEach((b, i) => {
     const x = b.start_sec * state.pps, w = (b.end_sec - b.start_sec) * state.pps;
     if (i % 2) { c.fillStyle = "#ffffff06"; c.fillRect(x, 0, w, H); }
     c.strokeStyle = "#3a3f4955"; c.lineWidth = 0.7;
     c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke();
-    const ch = b.chord || "";
-    if (w > 14) {
-      c.fillStyle = (ch !== prev) ? "#e6e8ec" : "#7d828c";  // highlight chord changes
-      c.fillText(ch, x + w / 2, H / 2 + 1);
-    }
-    prev = ch;
   });
 }
 
@@ -733,6 +677,7 @@ function selectPattern(stem, label) {
   // Loop the isolated representative-bar clip — "this is the sound you'd replace".
   // Falls back to the full-stem occurrence tour if the clip can't be fetched.
   playReference(stem, label).then((ok) => { if (!ok) play(); });
+  clearNewSound();   // a fresh part starts with no replacement sound chosen
   showReplaceUI();
   updateSelStatus();
 }
@@ -818,6 +763,22 @@ function showReplaceUI() {
   layoutTrim();
 }
 
+// Reset the "New sound" side back to empty (e.g. when switching to a fresh part).
+function clearNewSound() {
+  stopTrimPreview();
+  state.sampleFile = null;
+  state.newBuf = null;
+  state.trim = { start: 0, end: 0 };
+  state.view = { start: 0, end: 0 };
+  $("sampleName").textContent = "no sound chosen";
+  $("trimNewLabel").textContent = "–";
+  $("trimDur").textContent = "";
+  $("renderBtn").disabled = true;
+  $("addMedleyBtn").disabled = true;
+  drawWaveCanvas($("newWave"), null, "#ffb648");
+  layoutTrim();
+}
+
 function hideReplaceUI() {
   const row = $("replaceRow");
   if (row) row.style.display = "none";
@@ -855,14 +816,26 @@ async function renderReplacement() {
 
 /* ------------------------------------------------- messy medley (many parts) */
 
-// Drop the current part + chosen sound into the medley tray.
+// Mono samples of the new sound's selected (trimmed) region — the picture for a medley row.
+function trimmedMono() {
+  if (!state.newBuf) return null;
+  const mono = bufToMono(state.newBuf), sr = state.newBuf.sampleRate;
+  const s = Math.max(0, Math.floor(state.trim.start * sr));
+  const e = Math.min(mono.length, Math.ceil(state.trim.end * sr));
+  return Float32Array.from(mono.subarray(s, Math.max(s + 1, e)));
+}
+
+// Drop the current part + chosen sound into the medley as a new row at the top.
 function addToMedley() {
   if (!state.sel || !state.sampleFile) return;
   const { stem, label } = state.sel;
   const sound = currentSoundFile();   // snapshot the trimmed selection at add-time
-  // Replace any existing entry for this same part (one sound per part).
+  // Snapshot both waveforms so the row keeps its own picture after you move on.
+  const curMono = state.curBuf ? Float32Array.from(bufToMono(state.curBuf)) : null;
+  const newMono = trimmedMono();
+  // One sound per part: drop any prior row for this part, then add the fresh one on top.
   state.medley = state.medley.filter((m) => m.label !== label);
-  state.medley.push({ label, stem, file: sound });
+  state.medley.unshift({ label, stem, file: sound, curMono, newMono });
   renderMedleyList();
   $("renderStatus").textContent = `added ${stem} ${label} → ${sound.name} to the medley`;
 }
@@ -878,19 +851,33 @@ function clearMedley() {
   $("medleyStatus").textContent = "";
 }
 
+// One row per changed part: current part waveform on the left, new sound on the right.
 function renderMedleyList() {
   const list = $("medleyList");
   list.innerHTML = "";
   state.medley.forEach((m) => {
-    const chip = document.createElement("span");
-    chip.className = "medley-chip";
-    chip.style.borderLeftColor = (typeof patColor === "function") ? patColor(m.label) : "var(--accent)";
-    chip.innerHTML = `<b>${m.stem} ${m.label}</b> <span class="src">${m.file.name}</span>`;
+    const item = document.createElement("div");
+    item.className = "medley-item";
+    item.style.borderLeftColor = (typeof patColor === "function") ? patColor(m.label) : "var(--accent)";
+    item.innerHTML =
+      `<div class="trim-col">` +
+        `<span class="lbl">Current part · <b>${m.stem} ${m.label}</b></span>` +
+        `<div class="wave-wrap"><canvas></canvas></div>` +
+      `</div>` +
+      `<div class="trim-col">` +
+        `<span class="lbl">New sound · <b>${m.file.name}</b></span>` +
+        `<div class="wave-wrap"><canvas></canvas></div>` +
+      `</div>`;
     const x = document.createElement("button");
-    x.textContent = "✕"; x.title = "remove";
+    x.className = "medley-remove";
+    x.textContent = "✕"; x.title = "remove this part";
     x.onclick = () => removeFromMedley(m.label);
-    chip.appendChild(x);
-    list.appendChild(chip);
+    item.appendChild(x);
+    list.appendChild(item);
+    // Draw after attaching so the canvases have a measured width.
+    const [curCv, newCv] = item.querySelectorAll("canvas");
+    drawWaveCanvas(curCv, m.curMono, STEM_COLORS[m.stem] || "#888");
+    drawWaveCanvas(newCv, m.newMono, "#ffb648");
   });
   const has = state.medley.length > 0;
   $("medleyBtn").disabled = !has;
@@ -922,13 +909,61 @@ async function renderMedley() {
     });
     const info = await res.json();
     if (!res.ok || info.error) throw new Error(info.error || "medley render failed");
-    playBounce(info, $("medleyStatus"),
-      `done — ${n} parts, ${info.slots_replaced} slots across the ${info.duration_sec}s song ▶`);
+    await applyMedleyToTimeline(info);
+    $("medleyStatus").textContent =
+      `loaded into the timeline — ${n} parts, ${info.slots_replaced} slots · ▶ Play to hear it`;
   } catch (e) {
     $("medleyStatus").textContent = "medley failed: " + e.message;
   } finally {
     $("medleyBtn").disabled = !state.medley.length;
   }
+}
+
+// Swap the medley's edited stems into the main timeline playback: the affected
+// stem waveforms redraw, the replaced slots get marked, and the top-left ▶ plays
+// the medley (mute/solo/volume keep working). The flat bounce is still offered for
+// download via the renderAudio element. Reversible with revertMix().
+async function applyMedleyToTimeline(info) {
+  const stems = info.stems || {};
+  if (!Object.keys(stems).length) {           // server too old to return stems — fall back
+    playBounce(info, null, "");
+    return;
+  }
+  const ctx = ensureCtx();
+  const wasPlaying = state.playing;
+  pause();
+  // Snapshot the untouched originals once, so revert can put them back.
+  if (!state.origBuffers) state.origBuffers = { ...state.buffers };
+  for (const [stem, rel] of Object.entries(stems)) {
+    const ab = await (await fetch(encodeURI(rel) + "?t=" + Date.now(),
+                                  { cache: "no-store" })).arrayBuffer();
+    state.buffers[stem] = await ctx.decodeAudioData(ab);
+  }
+  // Remember which slots were replaced so the marks survive a re-render (zoom).
+  state.medleyHL = (info.placements || []).map((p) => ({ stem: p.stem, label: p.label }));
+  state.bounce = info;                          // keep the flat bounce for download
+  render();                                     // redraw lanes (new waveforms + marks)
+  if (wasPlaying) play();                        // pick up the new buffers mid-listen
+  showRevert(true);
+}
+
+// Put the original stems back on the timeline and drop the replaced-slot marks.
+function revertMix() {
+  if (!state.origBuffers) return;
+  const wasPlaying = state.playing;
+  pause();
+  state.buffers = state.origBuffers;
+  state.origBuffers = null;
+  state.medleyHL = [];
+  render();
+  if (wasPlaying) play();
+  showRevert(false);
+  $("medleyStatus").textContent = "reverted to the original mix";
+}
+
+function showRevert(on) {
+  const b = $("revertBtn");
+  if (b) b.style.display = on ? "inline-block" : "none";
 }
 
 // Play a bounce's returned mp3/wav in the shared bounce player and set a status line.
@@ -961,8 +996,9 @@ function bufToMono(buf) {
   return out;
 }
 
-// Draw a min/max waveform of a mono Float32 array into a canvas.
-function drawWaveCanvas(cv, mono, color) {
+// Draw a min/max waveform of a mono Float32 array into a canvas. An optional
+// [from, to] sample range draws just that slice across the full width (for zoom).
+function drawWaveCanvas(cv, mono, color, from, to) {
   if (!cv) return;
   const dpr = window.devicePixelRatio || 1;
   const w = cv.clientWidth || 300, h = cv.clientHeight || 64;
@@ -971,11 +1007,14 @@ function drawWaveCanvas(cv, mono, color) {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, w, h);
   if (!mono || !mono.length) return;
-  const mid = h / 2, step = mono.length / w;
+  let lo = Math.max(0, Math.floor(from == null ? 0 : from));
+  let hi = Math.min(mono.length, Math.ceil(to == null ? mono.length : to));
+  if (hi <= lo) { lo = 0; hi = mono.length; }
+  const mid = h / 2, step = (hi - lo) / w;
   g.strokeStyle = color || "#888"; g.lineWidth = 1; g.beginPath();
   for (let x = 0; x < w; x++) {
     let mn = 1, mx = -1;
-    const i0 = Math.floor(x * step), i1 = Math.min(mono.length, Math.floor((x + 1) * step));
+    const i0 = lo + Math.floor(x * step), i1 = Math.min(hi, lo + Math.floor((x + 1) * step));
     for (let i = i0; i < i1; i++) { const v = mono[i]; if (v < mn) mn = v; if (v > mx) mx = v; }
     if (i1 <= i0) { mn = 0; mx = 0; }
     g.moveTo(x + 0.5, mid - mx * mid * 0.95);
@@ -991,27 +1030,87 @@ function drawCurrentWave() {
   drawWaveCanvas($("curWave"), state.curBuf ? bufToMono(state.curBuf) : null, color);
 }
 
-// Position the trim shades + handles from state.trim over the new-sound waveform.
+// Max length the new sound's selection may use: the current part's length, so the
+// replacement fills the same slot. Infinity when no part is selected yet (no cap).
+function maxTrimLen() {
+  return state.curBuf ? state.curBuf.duration : Infinity;
+}
+
+// --- zoom viewport over the new sound (state.view, in seconds) -------------
+function viewSpan() { return Math.max(0.05, state.view.end - state.view.start); }
+
+// Smallest visible window we'll zoom into (keeps the waveform legible).
+function minViewSpan() { return Math.max(0.2, (state.trim.end - state.trim.start) * 0.5); }
+
+// Pan the viewport by dt seconds, clamped so it stays inside the clip.
+function panView(dt) {
+  if (!state.newBuf) return;
+  const span = viewSpan(), dur = state.newBuf.duration;
+  let s = Math.max(0, Math.min(state.view.start + dt, Math.max(0, dur - span)));
+  state.view = { start: s, end: s + span };
+}
+
+// Zoom the viewport so the selection sits comfortably in view (with context on
+// each side to drag into), centered on the current selection.
+function autoZoomView() {
+  if (!state.newBuf) return;
+  const dur = state.newBuf.duration;
+  const selLen = Math.max(0.05, state.trim.end - state.trim.start);
+  const span = Math.min(dur, Math.max(selLen * 2.5, selLen + 0.3));
+  const center = (state.trim.start + state.trim.end) / 2;
+  const s = Math.max(0, Math.min(center - span / 2, dur - span));
+  state.view = { start: s, end: s + span };
+}
+
+// Keep the selection visible while it's being dragged: pan the view to follow it.
+function ensureSelVisible() {
+  const span = viewSpan(), margin = span * 0.12;
+  if ((state.trim.end - state.trim.start) + 2 * margin > span) return;  // too zoomed-in to track
+  if (state.trim.start < state.view.start + margin)
+    panView(state.trim.start - (state.view.start + margin));
+  else if (state.trim.end > state.view.end - margin)
+    panView(state.trim.end - (state.view.end - margin));
+}
+
+// Redraw the new-sound waveform for the current zoom viewport.
+function drawNewWave() {
+  if (!state.newBuf) { drawWaveCanvas($("newWave"), null, "#ffb648"); return; }
+  const sr = state.newBuf.sampleRate;
+  drawWaveCanvas($("newWave"), bufToMono(state.newBuf), "#ffb648",
+                 state.view.start * sr, state.view.end * sr);
+}
+
+// Position the trim shades + handles + selection window over the zoomed waveform.
 function layoutTrim() {
   const wrap = $("newWaveWrap");
   if (!wrap) return;
   const w = wrap.clientWidth;
   const has = !!state.newBuf;
-  ["trimShadeL", "trimShadeR", "trimHandleS", "trimHandleE"].forEach((id) =>
+  ["trimShadeL", "trimShadeR", "trimWindow", "trimHandleS", "trimHandleE"].forEach((id) =>
     $(id).style.display = has ? "block" : "none");
   $("newWaveEmpty").style.display = has ? "none" : "flex";
   $("trimPlay").disabled = !has;
   $("trimReset").disabled = !has;
   if (!has) { $("trimDur").textContent = ""; return; }
-  const dur = state.newBuf.duration || 1;
-  const sx = (state.trim.start / dur) * w, ex = (state.trim.end / dur) * w;
-  $("trimShadeL").style.left = "0px"; $("trimShadeL").style.width = sx + "px";
-  $("trimShadeR").style.left = ex + "px"; $("trimShadeR").style.width = Math.max(0, w - ex) + "px";
+  drawNewWave();
+  const dur = state.newBuf.duration || 1, span = viewSpan();
+  const sx = ((state.trim.start - state.view.start) / span) * w;   // may fall outside [0,w]
+  const ex = ((state.trim.end - state.view.start) / span) * w;
+  const cl = (v) => Math.max(0, Math.min(w, v));
+  $("trimShadeL").style.left = "0px"; $("trimShadeL").style.width = cl(sx) + "px";
+  $("trimShadeR").style.left = cl(ex) + "px"; $("trimShadeR").style.width = Math.max(0, w - cl(ex)) + "px";
+  $("trimWindow").style.left = cl(sx) + "px"; $("trimWindow").style.width = Math.max(0, cl(ex) - cl(sx)) + "px";
+  // Hide a handle when its edge is scrolled out of the viewport.
+  $("trimHandleS").style.display = (sx < 0 || sx > w) ? "none" : "block";
+  $("trimHandleE").style.display = (ex < 0 || ex > w) ? "none" : "block";
   $("trimHandleS").style.left = sx + "px";
   $("trimHandleE").style.left = ex + "px";
+  const cap = maxTrimLen();
+  const capped = isFinite(cap) && dur > cap;
   $("trimDur").textContent =
     `${state.trim.start.toFixed(2)}–${state.trim.end.toFixed(2)}s of ${dur.toFixed(2)}s` +
-    ` (using ${(state.trim.end - state.trim.start).toFixed(2)}s)`;
+    ` (using ${(state.trim.end - state.trim.start).toFixed(2)}s` +
+    (capped ? ` · max ${cap.toFixed(2)}s to fit the part)` : ")");
 }
 
 // Decode + show the chosen sound; reset the trim region to the whole clip.
@@ -1025,8 +1124,8 @@ async function loadNewSound(file) {
     $("trimDur").textContent = "(browser can't preview this format — the full sound will be used)";
     return;
   }
-  state.trim = { start: 0, end: state.newBuf.duration };
-  drawWaveCanvas($("newWave"), bufToMono(state.newBuf), "#ffb648");
+  state.trim = { start: 0, end: Math.min(state.newBuf.duration, maxTrimLen()) };
+  autoZoomView();   // zoom in on the selection so it's easy to fine-tune + drag
   layoutTrim();
 }
 
@@ -1047,32 +1146,70 @@ function previewTrim() {
   state.trimSrc = src;
 }
 
-// Drag the two trim handles (pointer events) to reshape state.trim.
+// Drag the trim handles to reshape the selection, drag the selection body to move
+// it through the song (panning the zoom viewport at the edges), and wheel to zoom.
 function initTrimDrag() {
   const wrap = $("newWaveWrap");
-  let drag = null;
+  let drag = null;       // "start" | "end" | "window"
+  let winAnchor = null;  // { px, start } captured at window-drag start
+
+  // Pointer x (px) within the wrap -> time (s) in the new sound, via the viewport.
+  const xToTime = (clientX) => {
+    const r = wrap.getBoundingClientRect();
+    return state.view.start + ((clientX - r.left) / r.width) * viewSpan();
+  };
+
   const onMove = (e) => {
     if (!drag || !state.newBuf) return;
-    const r = wrap.getBoundingClientRect();
-    const frac = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-    const dur = state.newBuf.duration;
-    let t = frac * dur;
+    const dur = state.newBuf.duration, cap = maxTrimLen();
+    if (drag === "window") {
+      // Slide the whole selection, keeping its length; the view follows it.
+      const len = state.trim.end - state.trim.start;
+      let ns = winAnchor.start + (xToTime(e.clientX) - xToTime(winAnchor.px));
+      ns = Math.max(0, Math.min(ns, dur - len));
+      state.trim.start = ns; state.trim.end = ns + len;
+      ensureSelVisible();
+      layoutTrim();
+      return;
+    }
+    const t = xToTime(e.clientX);
     const gap = Math.min(0.02, dur * 0.02);
-    if (drag === "start") state.trim.start = Math.max(0, Math.min(t, state.trim.end - gap));
-    else state.trim.end = Math.min(dur, Math.max(t, state.trim.start + gap));
+    if (drag === "start") {
+      const lo = Math.max(0, state.trim.end - cap);   // keep width <= cap
+      state.trim.start = Math.max(lo, Math.min(t, state.trim.end - gap));
+    } else {
+      const hi = Math.min(dur, state.trim.start + cap);
+      state.trim.end = Math.min(hi, Math.max(t, state.trim.start + gap));
+    }
     layoutTrim();
   };
   const onUp = () => {
-    drag = null;
+    drag = null; winAnchor = null;
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
   };
-  [["trimHandleS", "start"], ["trimHandleE", "end"]].forEach(([id, which]) =>
-    $(id).addEventListener("pointerdown", (e) => {
-      e.preventDefault(); drag = which;
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-    }));
+  const startDrag = (which, e) => {
+    e.preventDefault(); drag = which;
+    if (which === "window") winAnchor = { px: e.clientX, start: state.trim.start };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+  [["trimHandleS", "start"], ["trimHandleE", "end"], ["trimWindow", "window"]].forEach(
+    ([id, which]) => $(id).addEventListener("pointerdown", (e) => startDrag(which, e)));
+
+  // Wheel to zoom the viewport, anchored on the cursor.
+  wrap.addEventListener("wheel", (e) => {
+    if (!state.newBuf) return;
+    e.preventDefault();
+    const dur = state.newBuf.duration, span = viewSpan();
+    const r = wrap.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    const anchorT = state.view.start + frac * span;        // time under the cursor
+    const ns = Math.max(minViewSpan(), Math.min(dur, span * (e.deltaY > 0 ? 1.2 : 1 / 1.2)));
+    let s = Math.max(0, Math.min(anchorT - frac * ns, dur - ns));
+    state.view = { start: s, end: s + ns };
+    layoutTrim();
+  }, { passive: false });
 }
 
 // Encode a mono Float32 array to a 16-bit PCM WAV Blob.
@@ -1112,8 +1249,11 @@ async function loadStems() {
   for (const tr of state.tracks) {
     try {
       const url = (state.data.__base || "") + tr.path.replace(/^.*stems\//, "stems/");
-      // prefer the path exactly as given (relative to harness root)
-      const res = await fetch(tr.path).catch(() => fetch(url));
+      // tr.path can be an absolute filesystem path (404 over HTTP), so prefer the
+      // served relative url. fetch() only rejects on network errors, not HTTP 404s,
+      // so check res.ok before falling back — otherwise the fallback never runs.
+      let res = await fetch(url).catch(() => null);
+      if (!res || !res.ok) res = await fetch(tr.path).catch(() => null);
       if (!res || !res.ok) throw new Error("fetch failed");
       const ab = await res.arrayBuffer();
       state.buffers[tr.type] = await ctx.decodeAudioData(ab);
@@ -1260,8 +1400,6 @@ $("songSel").onchange = (e) => {
   const s = e.target.value;
   if (s) { state.currentSong = s; $("path").value = `output/${s}/analysis.json`; loadFromPath(); }
 };
-document.querySelectorAll(".sens button").forEach((b) =>
-  (b.onclick = () => applySensitivity(b.dataset.s)));
 $("sampleBtn").onclick = () => $("sampleInput").click();
 $("sampleInput").onchange = (e) => {
   const f = e.target.files[0];
@@ -1275,19 +1413,21 @@ $("renderBtn").onclick = renderReplacement;
 $("addMedleyBtn").onclick = addToMedley;
 $("medleyBtn").onclick = renderMedley;
 $("medleyClear").onclick = clearMedley;
+$("revertBtn").onclick = revertMix;
 $("trimPlay").onclick = previewTrim;
 $("trimReset").onclick = () => {
   if (!state.newBuf) return;
-  state.trim = { start: 0, end: state.newBuf.duration };
+  state.trim = { start: 0, end: Math.min(state.newBuf.duration, maxTrimLen()) };
+  autoZoomView();
   layoutTrim();
 };
 initTrimDrag();
 renderMedleyList();   // paint the empty tray + disabled state on load
 window.addEventListener("resize", () => {
+  if (state.medley.length) renderMedleyList();   // medley row waveforms are width-dependent
   if ($("trimPanel").style.display === "none") return;
   drawCurrentWave();
-  if (state.newBuf) drawWaveCanvas($("newWave"), bufToMono(state.newBuf), "#ffb648");
-  layoutTrim();
+  layoutTrim();   // redraws the zoomed new-sound waveform too
 });
 $("zoom").oninput = (e) => {
   const t = currentTime();
@@ -1296,7 +1436,6 @@ $("zoom").oninput = (e) => {
   positionPlayhead(t);
 };
 $("timeline").addEventListener("click", (e) => {
-  if (e.target.closest(".section")) return;  // let section title clicks pass
   seekFromEvent(e);
 });
 

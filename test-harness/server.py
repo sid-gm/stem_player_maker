@@ -208,6 +208,9 @@ class Handler(SimpleHTTPRequestHandler):
             k: (str(Path(v).resolve().relative_to(ROOT)) if k in ("wav", "mp3") else v)
             for k, v in info["paths"].items()
         }
+        if info.get("stems"):  # edited per-stem wavs for the timeline -> also ROOT-relative
+            info["stems"] = {s: str(Path(p).resolve().relative_to(ROOT))
+                             for s, p in info["stems"].items()}
         return info
 
     def _render(self, u):
@@ -277,7 +280,8 @@ class Handler(SimpleHTTPRequestHandler):
                 sample = str(cand)
             placements.append({"label": label, "sample": sample})
         try:
-            info = render_medley(song_dir, placements, out_name=Path(name).name or "medley")
+            info = render_medley(song_dir, placements, out_name=Path(name).name or "medley",
+                                 write_stems=True)
             self._send_json(self._rel_paths(info))
         except SystemExit as exc:  # bad label / missing stem
             self._send_json({"error": str(exc)}, 400)

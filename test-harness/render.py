@@ -84,13 +84,19 @@ def _load_sample(song_dir: Path, analysis: dict, stem: str, label: str,
 
 def render_medley(song_dir: str | Path, placements: list[dict],
                   out_dir: str | Path | None = None, crossfade_ms: float = 8.0,
-                  mp3: bool = True, out_name: str = "medley") -> dict:
+                  mp3: bool = True, out_name: str = "medley",
+                  write_stems: bool = False) -> dict:
     """Bounce one song with many parts replaced at once.
 
     placements: [{"label": "B3", "sample": "horn.wav" | None}, ...]. Each placement
     drops its raw sample at every occurrence of that part. Parts may live in
     different stems (or several in the same stem); stems with no placement are kept
     untouched. The mix is summed and peak-normalized.
+
+    write_stems: also write each *edited* stem to <out>/stems/<stem>.wav and return
+    their paths under "stems" — lets the visualizer load the medley back into its
+    per-stem timeline playback (so the main Play button plays it and mute/solo work),
+    instead of only playing the flat bounce in a separate audio element.
     """
     song_dir = Path(song_dir)
     analysis = load_analysis(song_dir)
@@ -155,6 +161,16 @@ def render_medley(song_dir: str | Path, placements: list[dict],
     wav_path = out / f"bounce_{out_name}.wav"
     sf.write(str(wav_path), mix, sr, subtype="PCM_16")
     paths = {"wav": str(wav_path)}
+
+    # Per-stem edited copies (only the touched stems) for timeline playback.
+    stems_out: dict[str, str] = {}
+    if write_stems:
+        stem_out_dir = out / "stems"
+        stem_out_dir.mkdir(parents=True, exist_ok=True)
+        for s, arr in edited.items():
+            sp = stem_out_dir / f"{s}.wav"
+            sf.write(str(sp), arr[:n], sr, subtype="PCM_16")
+            stems_out[s] = str(sp)
     if mp3:
         mp3_path = out / f"bounce_{out_name}.mp3"
         try:
@@ -170,6 +186,7 @@ def render_medley(song_dir: str | Path, placements: list[dict],
         "duration_sec": round(n / sr, 2),
         "peak_before_norm": round(peak, 3),
         "paths": paths,
+        "stems": stems_out,
     }
 
 

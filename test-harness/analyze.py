@@ -228,10 +228,14 @@ def analyze(
 
     stems = []
     for name, path in stem_paths.items():
+        # Store a path relative to the analysis.json location (stems/<name>.wav)
+        # so the static server can serve it and the file stays portable; the
+        # absolute `path` is still used below for loudness/analysis.
+        rel_path = f"{Path(path).parent.name}/{Path(path).name}"
         stems.append(
             {
                 "type": name,
-                "path": str(path),
+                "path": rel_path,
                 "loudness_lufs": _loudness_lufs(path),
             }
         )
