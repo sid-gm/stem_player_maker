@@ -39,6 +39,7 @@
   }
   .transport button:hover { border-color: var(--accent); }
   .transport button.primary { background: var(--accent); border-color: var(--accent); color: #061018; font-weight: 600; }
+  .transport button.on { background: var(--accent); border-color: var(--accent); color: #061018; }
   .transport button:disabled { opacity: .45; cursor: not-allowed; border-color: var(--line); }
   /* Medley: one stacked row per changed part (current part | new sound) */
   .medley-section { padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
@@ -73,6 +74,14 @@
   .trim-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     color: var(--muted); font-size: 12px; }
   .trim-actions { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 11px; }
+  /* fun effect toggles under the New sound waveform — baked into the audio offline */
+  .fx-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 2px; }
+  .fx-lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin-right: 2px; }
+  .fx-btn { background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+            border-radius: 999px; padding: 4px 10px; cursor: pointer; font-size: 12px; line-height: 1; }
+  .fx-btn:hover:not(:disabled) { border-color: var(--accent); }
+  .fx-btn.on { background: #ffb648; border-color: #ffb648; color: #161616; font-weight: 600; }
+  .fx-btn:disabled { opacity: .4; cursor: not-allowed; }
   .spacer { flex: 1 1 auto; }
   .time { font-variant-numeric: tabular-nums; font-size: 14px; }
   .zoom { display: flex; align-items: center; gap: 6px; color: var(--muted); }
@@ -129,6 +138,9 @@
              opacity: .82; z-index: 3; }
   .pat-seg:hover { opacity: 1; box-shadow: inset 0 0 0 1px #fff9; }
   .pat-seg.sel  { opacity: 1; box-shadow: inset 0 0 0 2px #fff; }
+  /* one-off parts shown via "Show singles": dimmer, dashed outline so they read as non-repeating */
+  .pat-seg.single { opacity: .5; border: 1px dashed #ffffffaa; border-right-color: #ffffffaa; }
+  .pat-seg.single:hover { opacity: .9; }
   .pat-hi { position: absolute; top: 15px; bottom: 0; background: #ffffff12;
             border-left: 2px solid #fff; border-right: 2px solid #fff; pointer-events: none; z-index: 2; }
   /* replaced-with-custom-sound slots, marked on the stem lane after a medley render */
@@ -144,6 +156,7 @@
     <button id="stopBtn">■ Stop</button>
     <div class="time"><span id="cur">0:00.0</span> / <span id="dur">0:00.0</span></div>
     <div class="spacer"></div>
+    <button id="singlesBtn" title="Show one-off parts that don't repeat (so you can replace them too)">Show singles</button>
     <div class="zoom">zoom <input id="zoom" type="range" min="4" max="60" value="14" /></div>
   </div>
 
@@ -193,6 +206,7 @@
         <button id="trimReset" disabled>Reset trim</button>
         <span class="lbl" style="text-transform:none;letter-spacing:0;">drag the blue box to move it through the song · handles to trim · scroll to zoom</span>
       </div>
+      <div id="fxBar" class="fx-bar"></div>
     </div>
   </div>
 
@@ -254,11 +268,14 @@ const state = {
   offset: 0,          // playback position (sec) at ctxStart
   raf: null,
   sensitivity: "medium",
+  showSingles: false, // when false, one-off (non-repeating) patterns are hidden from the timeline
   currentSong: null,  // server folder name, when loaded from output/
   sampleFile: null,   // user's replacement sound (for /api/render)
   medley: [],         // queued placements: [{label, stem, file, curMono, newMono}] for /api/render-medley
   curBuf: null,       // AudioBuffer of the selected part's representative bar (current waveform)
-  newBuf: null,       // AudioBuffer of the chosen sound (new waveform + trim)
+  newBuf: null,       // AudioBuffer of the chosen sound, with effects baked in (waveform + trim)
+  rawBuf: null,       // untouched decode of the chosen sound (re-render effects from this)
+  fx: new Set(),      // active fun effects, baked into newBuf via OfflineAudioContext
   trim: { start: 0, end: 0 },  // selected region of newBuf, in seconds
   view: { start: 0, end: 0 },  // visible (zoomed) time window of newBuf, in seconds
   trimSrc: null,      // buffer source for the "preview selection" playback
@@ -606,17 +623,27 @@ function drawInactiveOverlay(cv, type) {
 
 /* ------------------------------------------------- per-layer pattern bands */
 
+// A "single" part doesn't repeat (one occurrence). Hidden by default; shown via "Show singles".
+function isSingle(p) {
+  if (!p) return false;
+  return p.repeated === false || (p.occurrence_count || (p.occurrences || []).length) <= 1;
+}
+
 function renderPatternBands(lane, type) {
   const pats = ((state.data.layers || {})[type]) || [];
   pats.forEach((p) => {
+    const single = isSingle(p);
+    if (single && !state.showSingles) return;  // hide one-off parts unless the toggle is on
     p.occurrences.forEach((occ) => {
       const seg = document.createElement("div");
       const selected = state.sel && state.sel.stem === type && state.sel.label === p.label;
-      seg.className = "pat-seg" + (selected ? " sel" : "");
+      seg.className = "pat-seg" + (selected ? " sel" : "") + (single ? " single" : "");
       seg.style.left = (occ.start_sec * state.pps) + "px";
       seg.style.width = Math.max(3, (occ.end_sec - occ.start_sec) * state.pps) + "px";
       seg.style.background = patColor(p.label);
-      seg.title = `${type} ${p.label} · ${p.occurrence_count}× · click to tour all occurrences`;
+      seg.title = single
+        ? `${type} ${p.label} · one-off (plays once) · click to replace this part`
+        : `${type} ${p.label} · ${p.occurrence_count}× · click to tour all occurrences`;
       if ((occ.end_sec - occ.start_sec) * state.pps > 16) seg.textContent = p.label;
       seg.onclick = (e) => { e.stopPropagation(); selectPattern(type, p.label); };
       lane.appendChild(seg);
@@ -768,6 +795,8 @@ function clearNewSound() {
   stopTrimPreview();
   state.sampleFile = null;
   state.newBuf = null;
+  state.rawBuf = null;
+  state.fx.clear();
   state.trim = { start: 0, end: 0 };
   state.view = { start: 0, end: 0 };
   $("sampleName").textContent = "no sound chosen";
@@ -776,6 +805,7 @@ function clearNewSound() {
   $("renderBtn").disabled = true;
   $("addMedleyBtn").disabled = true;
   drawWaveCanvas($("newWave"), null, "#ffb648");
+  syncFxButtons();
   layoutTrim();
 }
 
@@ -1113,20 +1143,167 @@ function layoutTrim() {
     (capped ? ` · max ${cap.toFixed(2)}s to fit the part)` : ")");
 }
 
+/* ------------------------------------------------- fun effects (baked offline) */
+// Toggle buttons that bake DSP into the chosen sound. Everything re-renders through
+// an OfflineAudioContext into state.newBuf, so the effect becomes real audio the
+// server receives — not just a live preview. state.rawBuf keeps the untouched decode
+// so toggling an effect off restores cleanly.
+
+function makeImpulse(ctx, dur, decay) {        // procedural reverb IR (no asset needed)
+  const sr = ctx.sampleRate, n = Math.max(1, Math.floor(sr * dur));
+  const buf = ctx.createBuffer(2, n, sr);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay);
+  }
+  return buf;
+}
+
+function makeCrushCurve(steps) {               // amplitude quantization -> lo-fi grit
+  const n = 1024, curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    curve[i] = Math.round(x * steps) / steps;
+  }
+  return curve;
+}
+
+// Each build(ctx, input) wires nodes and returns the chain's output node. `tail` is
+// extra render time (sec) the effect needs to ring out. `rate` (chipmunk) speeds the
+// source up, raising pitch and shortening the clip.
+const FX = {
+  chipmunk: { name: "Chipmunk", emoji: "🐿", rate: 1.55, tail: 0 },
+  crush: { name: "Crush", emoji: "💥", tail: 0, build: (ctx, input) => {
+      const ws = ctx.createWaveShaper(); ws.curve = makeCrushCurve(6);
+      const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 4000;
+      input.connect(ws).connect(lp); return lp; } },
+  telephone: { name: "Telephone", emoji: "☎️", tail: 0, build: (ctx, input) => {
+      const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 700;
+      const peak = ctx.createBiquadFilter(); peak.type = "peaking"; peak.frequency.value = 1700; peak.gain.value = 8; peak.Q.value = 2;
+      const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2600;
+      input.connect(hp).connect(peak).connect(lp); return lp; } },
+  wobble: { name: "Wobble", emoji: "〰️", tail: 0, build: (ctx, input) => {
+      const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 700; lp.Q.value = 9;
+      const lfo = ctx.createOscillator(); lfo.frequency.value = 4.5;
+      const amt = ctx.createGain(); amt.gain.value = 550;
+      lfo.connect(amt).connect(lp.frequency); lfo.start(0);
+      input.connect(lp); return lp; } },
+  chorus: { name: "Chorus", emoji: "👥", tail: 0.05, build: (ctx, input) => {
+      const delay = ctx.createDelay(); delay.delayTime.value = 0.028;
+      const lfo = ctx.createOscillator(); lfo.frequency.value = 1.6;
+      const amt = ctx.createGain(); amt.gain.value = 0.0035;
+      lfo.connect(amt).connect(delay.delayTime); lfo.start(0);
+      const wet = ctx.createGain(); wet.gain.value = 0.6;
+      const out = ctx.createGain();
+      input.connect(out); input.connect(delay).connect(wet).connect(out); return out; } },
+  robot: { name: "Robot", emoji: "🤖", tail: 0, build: (ctx, input) => {
+      const ring = ctx.createGain(); ring.gain.value = 0;          // ring-mod: signal * sine
+      const osc = ctx.createOscillator(); osc.type = "sine"; osc.frequency.value = 55;
+      osc.connect(ring.gain); osc.start(0);
+      input.connect(ring); return ring; } },
+  echo: { name: "Echo", emoji: "🔁", tail: 2.0, build: (ctx, input) => {
+      const delay = ctx.createDelay(2); delay.delayTime.value = 0.26;
+      const fb = ctx.createGain(); fb.gain.value = 0.42;
+      const wet = ctx.createGain(); wet.gain.value = 0.65;
+      const out = ctx.createGain();
+      delay.connect(fb).connect(delay);
+      input.connect(out); input.connect(delay).connect(wet).connect(out); return out; } },
+  reverb: { name: "Reverb", emoji: "🌫", tail: 2.4, build: (ctx, input) => {
+      const conv = ctx.createConvolver(); conv.buffer = makeImpulse(ctx, 2.2, 2.6);
+      const wet = ctx.createGain(); wet.gain.value = 0.85;
+      const dry = ctx.createGain(); dry.gain.value = 0.75;
+      const out = ctx.createGain();
+      input.connect(dry).connect(out); input.connect(conv).connect(wet).connect(out); return out; } },
+};
+// Display + processing order (pitch/tone first, time-based tails last).
+const FX_ORDER = ["chipmunk", "crush", "telephone", "wobble", "chorus", "robot", "echo", "reverb"];
+
+function fxActive() { return state.fx && state.fx.size > 0; }
+
+// Render state.rawBuf through the active effect chain into a fresh AudioBuffer.
+async function renderFx(rawBuf, fxSet) {
+  const active = FX_ORDER.filter((id) => fxSet.has(id));
+  if (!active.length) return rawBuf;
+  const rate = fxSet.has("chipmunk") ? FX.chipmunk.rate : 1;
+  const tail = active.reduce((s, id) => s + (FX[id].tail || 0), 0);
+  const sr = rawBuf.sampleRate;
+  const len = Math.max(1, Math.ceil((rawBuf.duration / rate + tail) * sr));
+  const octx = new OfflineAudioContext(Math.min(2, rawBuf.numberOfChannels), len, sr);
+  const src = octx.createBufferSource();
+  src.buffer = rawBuf; src.playbackRate.value = rate;
+  let node = src;
+  active.forEach((id) => { if (FX[id].build) node = FX[id].build(octx, node); });
+  node.connect(octx.destination);
+  src.start(0);
+  return await octx.startRendering();
+}
+
+function buildFxBar() {
+  const bar = $("fxBar");
+  if (!bar) return;
+  bar.innerHTML = `<span class="fx-lbl">effects</span>`;
+  FX_ORDER.forEach((id) => {
+    const b = document.createElement("button");
+    b.className = "fx-btn"; b.dataset.fx = id; b.disabled = true;
+    b.textContent = `${FX[id].emoji} ${FX[id].name}`;
+    b.title = `${FX[id].name} — stacks with the others, baked into your render`;
+    b.onclick = () => {
+      if (state.fx.has(id)) state.fx.delete(id); else state.fx.add(id);
+      applyFx();
+    };
+    bar.appendChild(b);
+  });
+}
+
+function syncFxButtons() {
+  const enabled = !!state.rawBuf;
+  document.querySelectorAll("#fxBar .fx-btn").forEach((b) => {
+    b.disabled = !enabled;
+    b.classList.toggle("on", enabled && state.fx.has(b.dataset.fx));
+  });
+}
+
+// Re-bake the active effects into state.newBuf, then refresh the waveform + trim.
+async function applyFx() {
+  syncFxButtons();
+  if (!state.rawBuf) return;
+  stopTrimPreview();
+  const token = (state._fxToken = (state._fxToken || 0) + 1);
+  // Whole clip selected? keep "select all" after the length changes (tails/chipmunk).
+  const wasFull = !state.newBuf ||
+    (state.trim.start <= 1e-3 && state.trim.end >= state.newBuf.duration - 1e-3);
+  let buf;
+  try { buf = await renderFx(state.rawBuf, state.fx); }
+  catch (e) { console.warn("fx render failed", e); buf = state.rawBuf; }
+  if (token !== state._fxToken) return;   // a newer toggle superseded this render
+  state.newBuf = buf;
+  const dur = buf.duration, cap = maxTrimLen();
+  if (wasFull || !(state.trim.end > state.trim.start)) {
+    state.trim = { start: 0, end: Math.min(dur, cap) };
+  } else {
+    state.trim.start = Math.max(0, Math.min(state.trim.start, dur));
+    state.trim.end = Math.min(dur, state.trim.start + cap, Math.max(state.trim.end, state.trim.start + 0.02));
+  }
+  autoZoomView();
+  layoutTrim();
+}
+
 // Decode + show the chosen sound; reset the trim region to the whole clip.
 async function loadNewSound(file) {
   $("trimNewLabel").textContent = file.name;
-  state.newBuf = null;
+  state.rawBuf = null; state.newBuf = null;
+  state.fx.clear();
   layoutTrim();
   try {
-    state.newBuf = await decodeFile(file);
+    state.rawBuf = await decodeFile(file);
   } catch (e) {
     $("trimDur").textContent = "(browser can't preview this format — the full sound will be used)";
+    syncFxButtons();
     return;
   }
-  state.trim = { start: 0, end: Math.min(state.newBuf.duration, maxTrimLen()) };
-  autoZoomView();   // zoom in on the selection so it's easy to fine-tune + drag
-  layoutTrim();
+  state.newBuf = state.rawBuf;
+  state.trim = { start: 0, end: Math.min(state.rawBuf.duration, maxTrimLen()) };
+  await applyFx();   // no effects yet -> newBuf = rawBuf; also enables the fx buttons + zoom
 }
 
 function stopTrimPreview() {
@@ -1234,11 +1411,12 @@ function currentSoundFile() {
   const mono = bufToMono(state.newBuf), sr = state.newBuf.sampleRate;
   const s = Math.max(0, Math.floor(state.trim.start * sr));
   const e = Math.min(mono.length, Math.ceil(state.trim.end * sr));
-  // No trim applied -> upload the original file untouched (cheapest, byte-exact).
-  if (s <= 0 && e >= mono.length) return state.sampleFile;
+  // No trim AND no effects -> upload the original file untouched (cheapest, byte-exact).
+  // With effects on we must encode from newBuf, or the baked DSP would be lost.
+  if (s <= 0 && e >= mono.length && !fxActive()) return state.sampleFile;
   const blob = encodeWav(mono.subarray(s, Math.max(s + 1, e)), sr);
   const base = state.sampleFile.name.replace(/\.[^.]+$/, "");
-  return new File([blob], base + "_trim.wav", { type: "audio/wav" });
+  return new File([blob], base + (fxActive() ? "_fx.wav" : "_trim.wav"), { type: "audio/wav" });
 }
 
 /* ----------------------------------------------------------- audio */
@@ -1393,6 +1571,15 @@ function seekFromEvent(e) {
 
 $("playBtn").onclick = () => (state.playing ? pause() : play());
 $("stopBtn").onclick = stop;
+$("singlesBtn").onclick = (e) => {
+  state.showSingles = !state.showSingles;
+  e.currentTarget.classList.toggle("on", state.showSingles);
+  if (!state.showSingles && state.sel && isSingle(
+        (((state.data || {}).layers || {})[state.sel.stem] || []).find((x) => x.label === state.sel.label) || {})) {
+    clearSelection(true);  // hiding singles: drop a selected single so nothing dangles
+  }
+  if (state.data) render();
+};
 $("loadBtn").onclick = loadFromPath;
 $("uploadBtn").onclick = () => $("fileInput").click();
 $("fileInput").onchange = (e) => { if (e.target.files[0]) uploadSong(e.target.files[0]); e.target.value = ""; };
@@ -1422,6 +1609,7 @@ $("trimReset").onclick = () => {
   layoutTrim();
 };
 initTrimDrag();
+buildFxBar();         // paint the effect toggles (disabled until a sound is chosen)
 renderMedleyList();   // paint the empty tray + disabled state on load
 window.addEventListener("resize", () => {
   if (state.medley.length) renderMedleyList();   // medley row waveforms are width-dependent
