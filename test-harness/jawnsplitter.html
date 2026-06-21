@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0b0b0f" />
+<title>jawnsplitter</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+<style>
+/* ============================================================
+   jawnsplitter — design tokens (inlined so this page is a single
+   self-contained, Vercel-droppable static file). Mirrors the
+   Claude Design project tokens/*.css.
+   ============================================================ */
+:root{
+  /* stem spectrum — the brand */
+  --stem-vocals:#ff5c8a; --stem-drums:#ffb23e; --stem-bass:#4ea1ff; --stem-other:#36d98a;
+  --stem-vocals-soft:#ff5c8a1f; --stem-drums-soft:#ffb23e1f; --stem-bass-soft:#4ea1ff1f; --stem-other-soft:#36d98a1f;
+  --on-stem:#0b0b0f;
+  /* brand */
+  --brand:#ff2e74; --brand-press:#e01a60; --brand-soft:#ff2e741f; --on-brand:#fff;
+  /* stage (dark neutrals) */
+  --stage-0:#0b0b0f; --stage-1:#121218; --stage-2:#1a1a22; --stage-3:#24242f; --stage-4:#2f2f3c;
+  /* ink */
+  --ink-0:#fff; --ink-1:#ededf2; --ink-2:#a4a4b6; --ink-3:#6c6c80;
+  /* lines */
+  --line:rgba(255,255,255,.10); --line-strong:rgba(255,255,255,.18);
+  --danger:#ff4d52;
+  /* semantic aliases */
+  --surface:var(--stage-2); --surface-raised:var(--stage-3);
+  /* type */
+  --font-display:"Bricolage Grotesque","Space Grotesk",system-ui,sans-serif;
+  --font-ui:"Space Grotesk",system-ui,-apple-system,sans-serif;
+  --font-mono:"Space Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  /* radii */
+  --r-sm:10px; --r-md:14px; --r-lg:20px; --r-xl:28px; --r-pill:999px;
+  /* shadows + glows */
+  --shadow-lg:0 8px 24px rgba(0,0,0,.45),0 20px 48px rgba(0,0,0,.35);
+  --glow-brand:0 0 0 1px rgba(255,46,116,.35),0 6px 28px rgba(255,46,116,.40);
+  --glow-vocals:0 0 24px rgba(255,92,138,.45); --glow-drums:0 0 24px rgba(255,178,62,.45);
+  --glow-bass:0 0 24px rgba(78,161,255,.45); --glow-other:0 0 24px rgba(54,217,138,.45);
+  /* motion */
+  --ease-out:cubic-bezier(.22,1,.36,1); --ease-pop:cubic-bezier(.34,1.56,.64,1);
+  --dur-fast:120ms; --dur-base:200ms; --dur-slow:340ms;
+  --container:460px;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;}
+body{
+  background:var(--stage-0);font-family:var(--font-ui);color:var(--ink-1);
+  -webkit-font-smoothing:antialiased;overscroll-behavior:none;
+  background-image:radial-gradient(900px 520px at 50% 0%, rgba(255,46,116,.10), transparent 60%),
+                   radial-gradient(700px 520px at 80% 100%, rgba(78,161,255,.08), transparent 60%);
+}
+#app{height:100dvh;}
+
+/* the mobile app shell — one centered column, full height */
+.app{position:relative;max-width:var(--container);margin:0 auto;height:100dvh;
+  display:flex;flex-direction:column;overflow:hidden;background:var(--stage-1);
+  box-shadow:0 0 0 1px var(--line);}
+.screen-wrap{position:relative;flex:1 1 0;min-height:0;overflow:hidden;}
+.scr{position:absolute;inset:0;display:flex;flex-direction:column;padding:18px 18px 18px;}
+
+::-webkit-scrollbar{width:0;height:0;}
+
+/* ---------- brandmark / wordmark ---------- */
+.brandmark{display:flex;flex-direction:column;gap:5px;width:60px;}
+.brandmark i{height:9px;border-radius:999px;display:block;}
+.wordmark{font-family:var(--font-display);font-weight:800;letter-spacing:-.04em;font-size:22px;color:var(--ink-0);}
+.wordmark b{color:var(--brand);}
+.bigtitle{font-family:var(--font-display);font-weight:800;letter-spacing:-.03em;color:var(--ink-0);}
+.eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);}
+.dash{border:2px dashed var(--line-strong);border-radius:var(--r-lg);}
+.ph-foot{font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;color:var(--ink-3);text-transform:uppercase;}
+
+/* ---------- buttons (ported from the kit) ---------- */
+.k-btn{font-family:var(--font-ui);font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  gap:8px;border:none;border-radius:var(--r-pill);white-space:nowrap;-webkit-tap-highlight-color:transparent;user-select:none;
+  transition:transform var(--dur-fast) var(--ease-pop),filter var(--dur-fast) var(--ease-out),box-shadow var(--dur-base) var(--ease-out);}
+.k-btn:disabled{opacity:.4;cursor:not-allowed;}
+.k-btn:not(:disabled):active{transform:scale(.96);}
+.k-btn--sm{height:38px;padding:0 16px;font-size:14px;}
+.k-btn--md{height:48px;padding:0 22px;font-size:16px;}
+.k-btn--lg{height:56px;padding:0 28px;font-size:17px;}
+.k-btn--block{width:100%;}
+.k-btn--primary{background:var(--brand);color:var(--on-brand);}
+.k-btn--primary:not(:disabled):active{box-shadow:var(--glow-brand);}
+.k-btn--ghost{background:transparent;color:var(--ink-1);box-shadow:inset 0 0 0 1px var(--line-strong);}
+
+.k-ib{display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:var(--r-pill);cursor:pointer;
+  flex:none;color:var(--ink-1);line-height:1;-webkit-tap-highlight-color:transparent;user-select:none;
+  transition:transform var(--dur-fast) var(--ease-pop),filter var(--dur-fast) var(--ease-out),box-shadow var(--dur-base) var(--ease-out);}
+.k-ib:disabled{opacity:.4;cursor:not-allowed;}
+.k-ib:not(:disabled):active{transform:scale(.92);}
+.k-ib--surface{background:var(--surface-raised);box-shadow:inset 0 0 0 1px var(--line-strong);}
+.k-ib--brand{background:var(--brand);color:var(--on-brand);}
+.k-ib--brand.on{box-shadow:var(--glow-brand);}
+
+.k-tag{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;border-radius:var(--r-pill);white-space:nowrap;}
+.k-tag--sm{height:22px;padding:0 9px;font-size:11px;}
+.k-tag .x{opacity:.65;}
+
+/* ---------- timeline (horizontally scrollable: fixed px/sec so real
+   single-bar parts stay tappable; stem labels stick to the left edge) ---------- */
+.tlscroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;}
+.tl{position:relative;display:flex;flex-direction:column;gap:11px;width:max-content;min-width:100%;}
+.tlane{display:flex;align-items:center;gap:10px;}
+.tlane.muted{opacity:.4;}
+.tlane .lab{width:54px;flex:none;display:flex;flex-direction:column;gap:3px;position:sticky;left:0;z-index:3;background:var(--stage-1);}
+.tlane .lab .nm{font-family:var(--font-mono);font-weight:700;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-1);}
+.tlane .lab .ct{font-family:var(--font-mono);font-size:9px;color:var(--ink-3);cursor:pointer;}
+.tlane .lab .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle;}
+.track{position:relative;flex:none;height:50px;background:var(--stage-2);border-radius:9px;
+  box-shadow:inset 0 0 0 1px var(--line);overflow:hidden;}
+.blk{position:absolute;top:0;bottom:0;border-radius:7px;cursor:pointer;overflow:hidden;display:flex;flex-direction:column;
+  justify-content:center;padding:5px 6px;box-sizing:border-box;border:none;text-align:left;font-family:var(--font-ui);
+  transition:box-shadow var(--dur-base) var(--ease-out),background var(--dur-base) var(--ease-out);}
+.blk:active{filter:brightness(1.15);}
+.blk .bt{font-family:var(--font-mono);font-weight:700;font-size:10px;letter-spacing:.02em;color:var(--ink-0);display:flex;align-items:center;gap:3px;white-space:nowrap;}
+.blk .bt .x{opacity:.55;font-size:8px;}
+.blk .fxm{position:absolute;bottom:2px;right:4px;font-size:9px;}
+.playhead{position:absolute;top:0;bottom:0;width:2px;background:var(--ink-0);box-shadow:0 0 10px rgba(255,255,255,.9);z-index:4;pointer-events:none;border-radius:2px;}
+.rlane .lab{background:transparent;}
+.rsec{position:absolute;top:0;font-family:var(--font-mono);font-size:9px;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;padding-left:3px;box-shadow:inset 1px 0 0 var(--line);}
+
+/* ---------- transport ---------- */
+.xport{flex:none;margin:8px -18px -18px;padding:11px 18px calc(14px + env(safe-area-inset-bottom));
+  background:rgba(18,18,24,.92);backdrop-filter:blur(20px);box-shadow:0 -1px 0 var(--line);}
+.xrow{display:flex;align-items:center;gap:10px;}
+.xtime{font-family:var(--font-mono);font-size:12px;color:var(--ink-1);white-space:nowrap;}
+.xtime span{color:var(--ink-3);}
+.loop-pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;background:var(--brand-soft);
+  color:var(--brand);box-shadow:inset 0 0 0 1px var(--brand);border-radius:999px;padding:5px 10px;}
+
+/* ---------- bottom sheet ---------- */
+.scrim{position:absolute;inset:0;background:rgba(5,5,9,.55);display:flex;align-items:flex-end;z-index:20;animation:wf-f .2s var(--ease-out);}
+@keyframes wf-f{from{opacity:0}to{opacity:1}}
+.sheet{width:100%;background:rgba(20,20,28,.98);backdrop-filter:blur(24px);border-radius:26px 26px 0 0;
+  box-shadow:0 -8px 40px rgba(0,0,0,.5);padding:10px 18px calc(18px + env(safe-area-inset-bottom));box-sizing:border-box;
+  display:flex;flex-direction:column;gap:12px;animation:wf-su .34s var(--ease-out);max-height:92%;overflow-y:auto;}
+@keyframes wf-su{from{transform:translateY(100%)}to{transform:none}}
+.grab{width:38px;height:5px;border-radius:999px;background:var(--line-strong);align-self:center;}
+.shead{display:flex;align-items:flex-start;gap:12px;}
+.shead .st{font-family:var(--font-display);font-weight:800;font-size:21px;letter-spacing:-.02em;color:var(--ink-0);}
+.shead .ss{font-family:var(--font-mono);font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-top:3px;}
+.lbl{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);}
+.cmp{position:relative;background:var(--surface);border-radius:14px;padding:11px 12px;box-shadow:inset 0 0 0 1px var(--line);}
+.cmp.act{box-shadow:inset 0 0 0 2px var(--brand);}
+.cmp .cn{position:absolute;top:9px;right:11px;font-family:var(--font-mono);font-size:10px;color:var(--ink-2);}
+.cmp .cn.b{color:var(--brand);}
+.vs{align-self:center;font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;color:var(--ink-3);text-transform:uppercase;}
+.drop{border:2px dashed var(--line-strong);border-radius:14px;padding:16px;text-align:center;color:var(--ink-2);
+  font-weight:600;font-size:14px;cursor:pointer;display:flex;flex-direction:column;gap:9px;align-items:center;}
+.drop .row{display:flex;gap:10px;}
+.drop .mini{font-family:var(--font-mono);font-size:11px;color:var(--ink-3);}
+.fxwrap{display:flex;flex-wrap:wrap;gap:6px;}
+.fxb{font-family:var(--font-mono);font-size:12px;padding:7px 9px;border-radius:999px;background:var(--stage-3);
+  box-shadow:inset 0 0 0 1px var(--line);color:var(--ink-1);cursor:pointer;display:inline-flex;gap:5px;align-items:center;border:none;
+  transition:transform var(--dur-fast) var(--ease-pop);}
+.fxb:active{transform:scale(.94);}
+.fxb.on{background:var(--stem-drums);color:var(--on-stem);box-shadow:none;font-weight:700;}
+.fxb:disabled{opacity:.4;cursor:not-allowed;}
+.ab{display:inline-flex;background:var(--stage-3);border-radius:999px;padding:3px;box-shadow:inset 0 0 0 1px var(--line);}
+.ab button{font-family:var(--font-mono);font-size:12px;padding:7px 15px;border-radius:999px;border:none;background:transparent;color:var(--ink-2);cursor:pointer;}
+.ab button.on{background:var(--ink-1);color:var(--stage-0);font-weight:700;}
+.ab button:disabled{opacity:.4;}
+.auline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.lrow{display:flex;align-items:center;gap:9px;background:var(--surface-raised);border-radius:12px;padding:9px 11px;box-shadow:inset 0 0 0 1px var(--line);}
+.lrow .fn{font-family:var(--font-mono);font-size:12px;color:var(--ink-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lrow .fxm{font-size:12px;color:var(--ink-3);margin-left:auto;}
+.lrow .rv{background:var(--stage-3);box-shadow:inset 0 0 0 1px var(--line);color:var(--ink-1);border:none;border-radius:999px;width:30px;height:30px;cursor:pointer;flex:none;}
+/* ---------- trim panel (waveform + drag handles, ported from visualizer) ---------- */
+.jx-trim{position:relative;height:64px;background:var(--surface);border-radius:12px;
+  box-shadow:inset 0 0 0 1px var(--line);overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair;}
+.jx-trim canvas{position:absolute;inset:0;display:block;}
+.jx-shade{position:absolute;top:0;bottom:0;background:rgba(5,7,12,.62);pointer-events:none;z-index:1;}
+.jx-win{position:absolute;top:0;bottom:0;cursor:grab;background:rgba(255,46,116,.10);
+  box-shadow:inset 0 0 0 1px var(--brand);touch-action:none;z-index:2;}
+.jx-win:active{cursor:grabbing;}
+.jx-handle{position:absolute;top:0;bottom:0;width:20px;margin-left:-10px;z-index:3;cursor:ew-resize;
+  touch-action:none;display:flex;align-items:center;justify-content:center;}
+.jx-handle::after{content:"";width:3px;height:28px;border-radius:2px;background:var(--brand);box-shadow:0 0 8px rgba(255,46,116,.7);}
+.trimbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;}
+.trimbar .info{font-family:var(--font-mono);font-size:11px;color:var(--ink-3);flex:1;min-width:120px;}
+.trimbar .zb{font-family:var(--font-mono);font-size:13px;background:var(--stage-3);box-shadow:inset 0 0 0 1px var(--line);
+  color:var(--ink-1);border:none;border-radius:999px;width:30px;height:30px;cursor:pointer;flex:none;}
+.trimbar .zb:active{transform:scale(.92);}
+.trimbar .tx{font-family:var(--font-mono);font-size:11px;background:var(--stage-3);box-shadow:inset 0 0 0 1px var(--line);
+  color:var(--ink-1);border:none;border-radius:999px;padding:7px 11px;cursor:pointer;}
+.trimbar .tx:active{transform:scale(.95);}
+.toast{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:40;
+  background:var(--stage-3);box-shadow:0 8px 24px rgba(0,0,0,.5),inset 0 0 0 1px var(--line);color:var(--ink-1);
+  font-family:var(--font-mono);font-size:12px;padding:9px 14px;border-radius:999px;max-width:88%;text-align:center;}
+.toast.err{box-shadow:0 8px 24px rgba(0,0,0,.5),inset 0 0 0 1px var(--danger);color:#ffd9da;}
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="text/babel" data-presets="react">
+/* jawnsplitter — mobile view (small browsers / phones).
+   Upload → split → studio (timeline) → swap a part → preview, wired to the
+   real backend (server.py / backend-skeleton.md). Client-side effects ported
+   from visualizer.html are baked into each swap sample before upload. */
+
+const { useState, useEffect, useRef } = React;
+
+/* ----------------------------------------------------------- config
+   API base: same-origin by default (works under server.py at :8753).
+   Override with ?api=https://your-backend  or  localStorage.jx_api_base
+   so the static page can live on Vercel and talk to a hosted backend. */
+const API_BASE = ((new URLSearchParams(location.search).get("api"))
+  || localStorage.getItem("jx_api_base") || "").replace(/\/+$/, "");
+const api = (p) => API_BASE + p;
+const asset = (rel) => api("/" + encodeURI(rel).replace(/^\/+/, "")) + (rel.includes("?") ? "" : "?t=" + Date.now());
+console.log("[jawnsplitter] API_BASE =", API_BASE || "(same-origin)");
+
+const STEMS = ["vocals", "drums", "bass", "other"];
+const SENSITIVITY = "medium";
+const fmt = (s) => { if (!isFinite(s) || s < 0) s = 0; const m = Math.floor(s / 60); const x = Math.floor(s % 60); return `${m}:${String(x).padStart(2, "0")}`; };
+const stemOf = (data, label) => STEMS.find((s) => ((data.layers || {})[s] || []).some((p) => p.label === label));
+const partOf = (data, label) => { const s = stemOf(data, label); return s ? (data.layers[s] || []).find((p) => p.label === label) : null; };
+/* the longest occurrence of a part, in seconds — the most a replacement sound can use
+   and still "fit the part". The server trims each placement down to its own occurrence,
+   so this is just the cap the trim UI enforces. */
+const partMaxLen = (part) => Math.max(0.05, ...(((part && part.occurrences) || []).map((o) => o.end_sec - o.start_sec)));
+const trimKey = (t) => t ? `${(+t.start).toFixed(3)}-${(+t.end).toFixed(3)}` : "";
+/* a stable signature of the current swap set — lets a render be reused while the
+   swaps are unchanged, and re-triggered the moment a sound/effect/trim/part changes. */
+const sigOf = (swaps) => Object.entries(swaps).map(([l, v]) => l + ":" + v.name + ":" + v.fx.join("") + ":" + trimKey(v.trim)).join("|");
+
+/* ============================================================ audio engine
+   Imperative singleton around Web Audio: synced multi-stem playback with one
+   playhead, plus a looping reference-clip preview. React mirrors prog/playing
+   through onTick/onState callbacks. */
+const Eng = {
+  ctx: null, master: null, buffers: {}, origBuffers: null, editedBuffers: null,
+  gains: {}, sources: null, refSrc: null, refGen: 0, muted: {},
+  playing: false, silent: false, ctxStart: 0, offset: 0, raf: null, dur: 0,
+  onTick: null, onState: null,
+};
+function ensureCtx() {
+  if (!Eng.ctx) {
+    Eng.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    Eng.master = Eng.ctx.createGain();
+    Eng.master.connect(Eng.ctx.destination);
+  }
+  if (Eng.ctx.state === "suspended") Eng.ctx.resume();
+  return Eng.ctx;
+}
+function applyGains() {
+  for (const [stem, g] of Object.entries(Eng.gains)) g.gain.value = Eng.muted[stem] ? 0 : 1;
+}
+function engNow() { return Eng.silent ? performance.now() / 1000 : Eng.ctx.currentTime; }
+function engTime() { return Eng.playing ? Eng.offset + (engNow() - Eng.ctxStart) : Eng.offset; }
+function engRaf() {
+  const t = engTime();
+  if (t >= Eng.dur) { engStop(); return; }
+  if (Eng.onTick) Eng.onTick(t, Eng.dur);
+  Eng.raf = requestAnimationFrame(engRaf);
+}
+function engPlay() {
+  if (Eng.playing) return;
+  engStopReference();
+  const ctx = ensureCtx();
+  const bufs = Eng.buffers;
+  if (!Object.keys(bufs).length) {                 // no stems decoded — silent playhead
+    Eng.silent = true; Eng.ctxStart = performance.now() / 1000; Eng.playing = true;
+    Eng.onState && Eng.onState(true); engRaf(); return;
+  }
+  Eng.silent = false; Eng.sources = []; Eng.gains = {};
+  for (const [stem, buf] of Object.entries(bufs)) {
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const g = ctx.createGain(); Eng.gains[stem] = g;
+    src.connect(g).connect(Eng.master);
+    src.start(0, Math.max(0, Eng.offset));
+    Eng.sources.push(src);
+  }
+  applyGains();
+  Eng.ctxStart = ctx.currentTime; Eng.playing = true;
+  Eng.onState && Eng.onState(true); engRaf();
+}
+function engPause() {
+  if (!Eng.playing) return;
+  Eng.offset = engTime();
+  if (Eng.sources) Eng.sources.forEach((s) => { try { s.stop(); } catch (e) {} });
+  Eng.sources = null; Eng.playing = false; Eng.silent = false;
+  cancelAnimationFrame(Eng.raf);
+  Eng.onState && Eng.onState(false);
+}
+function engStop() { engPause(); Eng.offset = 0; if (Eng.onTick) Eng.onTick(0, Eng.dur); }
+function engSeek(sec) {
+  const was = Eng.playing; engPause();
+  Eng.offset = Math.min(Math.max(0, sec), Eng.dur || 0);
+  if (Eng.onTick) Eng.onTick(Eng.offset, Eng.dur);
+  if (was) engPlay();
+}
+function engStopReference() {
+  Eng.refGen = (Eng.refGen | 0) + 1;            // invalidate any in-flight playReference load
+  if (Eng.refSrc) { try { Eng.refSrc.stop(); } catch (e) {} Eng.refSrc = null; }
+}
+function engReset() {
+  engStop(); engStopReference();
+  Eng.buffers = {}; Eng.origBuffers = null; Eng.editedBuffers = null; Eng.muted = {}; Eng.dur = 0;
+}
+
+async function fetchDecode(url) {
+  const ctx = ensureCtx();
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return await ctx.decodeAudioData(await res.arrayBuffer());
+}
+async function loadStems(data, song) {
+  // Decode into a LOCAL object, not the shared Eng.buffers: Studio mounts while this
+  // runs (loadSong flips to "studio" before awaiting us) and its mount effect reassigns
+  // Eng.buffers mid-load. Mutating Eng.buffers across awaits would let that reassignment
+  // orphan whatever already decoded (the first stem, vocals). Assign atomically at the end.
+  const buffers = {}; Eng.dur = data.duration_sec || 0;
+  let ok = 0;
+  for (const s of (data.stems || [])) {
+    // analysis.json stem paths vary (relative "stems/x.wav", "output/<song>/stems/x.wav",
+    // or an absolute fs path). The on-disk layout is always output/<song>/stems/<type>.wav,
+    // so rebuild from the song folder first, then fall back to the stored path.
+    const tries = [];
+    if (song) tries.push(`output/${song}/stems/${s.type}.wav`);
+    if (s.path) { const i = s.path.indexOf("output/"); tries.push(i >= 0 ? s.path.slice(i) : s.path); }
+    for (const rel of tries) {
+      try { buffers[s.type] = await fetchDecode(asset(rel)); ok++; break; } catch (e) { /* try next */ }
+    }
+  }
+  Eng.buffers = buffers;
+  Eng.origBuffers = { ...buffers };
+  return ok;
+}
+/* loop a part's representative-bar preview clip, soloed to its stem */
+async function playReference(song, label) {
+  engPause(); engStopReference();
+  const gen = Eng.refGen;                        // this load is only valid until the next engStopReference()
+  const r = await fetch(api(`/api/reference?song=${encodeURIComponent(song)}&label=${encodeURIComponent(label)}`), { cache: "no-store" });
+  const info = await r.json();
+  if (!r.ok || info.error) throw new Error(info.error || "reference failed");
+  const buf = await fetchDecode(asset(info.path));
+  if (gen !== Eng.refGen) return info;           // superseded while loading (sheet closed / ab flipped) — don't start an orphan
+  const ctx = ensureCtx();
+  const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+  src.connect(Eng.master); src.start();
+  Eng.refSrc = src;
+  return info;
+}
+
+/* ---- sample decode / effects / WAV encode (ported from visualizer.html) ---- */
+async function decodeFile(file) { return await ensureCtx().decodeAudioData(await file.arrayBuffer()); }
+function bufToMono(buf) {
+  if (buf.numberOfChannels === 1) return buf.getChannelData(0);
+  const n = buf.length, out = new Float32Array(n);
+  for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) out[i] += d[i]; }
+  for (let i = 0; i < n; i++) out[i] /= buf.numberOfChannels;
+  return out;
+}
+function makeImpulse(ctx, dur, decay) {
+  const sr = ctx.sampleRate, n = Math.max(1, Math.floor(sr * dur)), buf = ctx.createBuffer(2, n, sr);
+  for (let c = 0; c < 2; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay); }
+  return buf;
+}
+function makeCrushCurve(steps) {
+  const n = 1024, curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; curve[i] = Math.round(x * steps) / steps; }
+  return curve;
+}
+const FX = {
+  chipmunk: { name: "chipmunk", e: "🐿", rate: 1.55, tail: 0 },
+  crush: { name: "crush", e: "💥", tail: 0, build: (ctx, input) => {
+      const ws = ctx.createWaveShaper(); ws.curve = makeCrushCurve(6);
+      const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 4000;
+      input.connect(ws).connect(lp); return lp; } },
+  telephone: { name: "phone", e: "☎️", tail: 0, build: (ctx, input) => {
+      const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 700;
+      const peak = ctx.createBiquadFilter(); peak.type = "peaking"; peak.frequency.value = 1700; peak.gain.value = 8; peak.Q.value = 2;
+      const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2600;
+      input.connect(hp).connect(peak).connect(lp); return lp; } },
+  wobble: { name: "wobble", e: "〰️", tail: 0, build: (ctx, input) => {
+      const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 700; lp.Q.value = 9;
+      const lfo = ctx.createOscillator(); lfo.frequency.value = 4.5;
+      const amt = ctx.createGain(); amt.gain.value = 550;
+      lfo.connect(amt).connect(lp.frequency); lfo.start(0);
+      input.connect(lp); return lp; } },
+  chorus: { name: "chorus", e: "👥", tail: 0.05, build: (ctx, input) => {
+      const delay = ctx.createDelay(); delay.delayTime.value = 0.028;
+      const lfo = ctx.createOscillator(); lfo.frequency.value = 1.6;
+      const amt = ctx.createGain(); amt.gain.value = 0.0035;
+      lfo.connect(amt).connect(delay.delayTime); lfo.start(0);
+      const wet = ctx.createGain(); wet.gain.value = 0.6; const out = ctx.createGain();
+      input.connect(out); input.connect(delay).connect(wet).connect(out); return out; } },
+  robot: { name: "robot", e: "🤖", tail: 0, build: (ctx, input) => {
+      const ring = ctx.createGain(); ring.gain.value = 0;
+      const osc = ctx.createOscillator(); osc.type = "sine"; osc.frequency.value = 55;
+      osc.connect(ring.gain); osc.start(0);
+      input.connect(ring); return ring; } },
+  echo: { name: "echo", e: "🔁", tail: 2.0, build: (ctx, input) => {
+      const delay = ctx.createDelay(2); delay.delayTime.value = 0.26;
+      const fb = ctx.createGain(); fb.gain.value = 0.42; const wet = ctx.createGain(); wet.gain.value = 0.65; const out = ctx.createGain();
+      delay.connect(fb).connect(delay);
+      input.connect(out); input.connect(delay).connect(wet).connect(out); return out; } },
+  reverb: { name: "reverb", e: "🌫", tail: 2.4, build: (ctx, input) => {
+      const conv = ctx.createConvolver(); conv.buffer = makeImpulse(ctx, 2.2, 2.6);
+      const wet = ctx.createGain(); wet.gain.value = 0.85; const dry = ctx.createGain(); dry.gain.value = 0.75; const out = ctx.createGain();
+      input.connect(dry).connect(out); input.connect(conv).connect(wet).connect(out); return out; } },
+};
+const FX_ORDER = ["chipmunk", "crush", "telephone", "wobble", "chorus", "robot", "echo", "reverb"];
+async function renderFx(rawBuf, fxSet) {
+  const active = FX_ORDER.filter((id) => fxSet.includes(id));
+  if (!active.length) return rawBuf;
+  const rate = fxSet.includes("chipmunk") ? FX.chipmunk.rate : 1;
+  const tail = active.reduce((s, id) => s + (FX[id].tail || 0), 0);
+  const sr = rawBuf.sampleRate;
+  const len = Math.max(1, Math.ceil((rawBuf.duration / rate + tail) * sr));
+  const octx = new OfflineAudioContext(Math.min(2, rawBuf.numberOfChannels), len, sr);
+  const src = octx.createBufferSource(); src.buffer = rawBuf; src.playbackRate.value = rate;
+  let node = src;
+  active.forEach((id) => { if (FX[id].build) node = FX[id].build(octx, node); });
+  node.connect(octx.destination); src.start(0);
+  return await octx.startRendering();
+}
+function encodeWav(samples, sr) {
+  const n = samples.length, ab = new ArrayBuffer(44 + n * 2), dv = new DataView(ab);
+  const ws = (off, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)); };
+  ws(0, "RIFF"); dv.setUint32(4, 36 + n * 2, true); ws(8, "WAVE");
+  ws(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  ws(36, "data"); dv.setUint32(40, n * 2, true);
+  let off = 44;
+  for (let i = 0; i < n; i++) { const v = Math.max(-1, Math.min(1, samples[i])); dv.setInt16(off, v < 0 ? v * 0x8000 : v * 0x7fff, true); off += 2; }
+  return new Blob([ab], { type: "audio/wav" });
+}
+/* bake the chosen sound (raw decode + fx + trim) into a mono WAV File ready to upload.
+   The trim selection is in the *baked* buffer's timeline (fx like chipmunk change its
+   length), so we render fx first and then slice. If it never decoded (rare format),
+   fall back to the raw file (no fx / no trim — the server still fits it to the part). */
+async function bakeSwapFile(swap) {
+  if (!swap.rawBuf) return swap.file;
+  const baked = await renderFx(swap.rawBuf, swap.fx);
+  const sr = baked.sampleRate;
+  let mono = bufToMono(baked);
+  const tr = swap.trim;
+  const trimmed = tr && (tr.start > 1e-3 || tr.end < baked.duration - 1e-3) && tr.end > tr.start;
+  if (trimmed) {
+    const s = Math.max(0, Math.floor(tr.start * sr));
+    const e = Math.min(mono.length, Math.ceil(tr.end * sr));
+    mono = mono.subarray(s, Math.max(s + 1, e));
+  }
+  const blob = encodeWav(mono, sr);
+  const base = swap.name.replace(/\.[^.]+$/, "");
+  return new File([blob], base + (swap.fx.length ? "_fx" : "") + (trimmed ? "_trim" : "") + ".wav", { type: "audio/wav" });
+}
+
+/* Render the medley for the current swaps: upload each baked sample (POST /api/sample),
+   bounce them in one mix (POST /api/render-medley), then decode the edited per-stem WAVs
+   into Eng.editedBuffers so playback can A/B against the originals gaplessly. Returns the
+   server render info, stamped with the swap `sig` so callers know which swaps it covers.
+   Shared by the studio (timeline remix playback) and finalize (export). */
+async function renderMedley(song, swaps, onStatus) {
+  const entries = Object.entries(swaps);
+  const placements = [];
+  for (const [label, v] of entries) {
+    onStatus && onStatus(`uploading ${v.name} …`);
+    const file = v.file || await bakeSwapFile(v);
+    const r = await fetch(api(`/api/sample?name=${encodeURIComponent(v.name)}`), { method: "POST", body: file });
+    const info = await r.json(); if (!r.ok || info.error) throw new Error(info.error || "sample upload failed");
+    placements.push({ label, sample_id: info.id });
+  }
+  onStatus && onStatus(`rendering ${entries.length} swap${entries.length > 1 ? "s" : ""} … (~10–40s)`);
+  const r2 = await fetch(api("/api/render-medley"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ song, placements, name: "medley", confine: true }) });
+  const info = await r2.json(); if (!r2.ok || info.error) throw new Error(info.error || "render failed");
+  const edited = { ...(Eng.origBuffers || {}) };
+  for (const [stem, rel] of Object.entries(info.stems || {})) { try { edited[stem] = await fetchDecode(asset(rel)); } catch (e) {} }
+  Eng.editedBuffers = edited;
+  info.sig = sigOf(swaps);
+  return info;
+}
+
+/* ============================================================ primitives */
+function Button({ variant = "primary", size = "md", block, style, children, ...rest }) {
+  return <button className={`k-btn k-btn--${variant} k-btn--${size}${block ? " k-btn--block" : ""}`} style={style} {...rest}>{children}</button>;
+}
+const IB_SIZE = { sm: 34, md: 44, lg: 54 };
+function IconButton({ variant = "surface", size = "md", active, style, children, ...rest }) {
+  const px = IB_SIZE[size] || 44;
+  return <button className={`k-ib k-ib--${variant}${active ? " on" : ""}`} style={{ width: px, height: px, fontSize: Math.round(px * 0.42), ...style }} {...rest}>{children}</button>;
+}
+function StemTag({ stem = "other", label, count, style }) {
+  return <span className="k-tag k-tag--sm" style={{ background: `var(--stem-${stem})`, color: "var(--on-stem)", ...style }}>
+    {label}{count != null && <span className="x">×{count}</span>}</span>;
+}
+function seededBars(seed, n) {
+  let h = 2166136261; const s = String(seed || "jawn"); const out = [];
+  for (let i = 0; i < n; i++) {
+    h ^= s.charCodeAt(i % s.length) + i * 73; h = Math.imul(h, 16777619) >>> 0;
+    const base = (h % 1000) / 1000, swell = 1 - Math.abs(i / (n - 1) - 0.5) * 0.7;
+    out.push(0.18 + base * 0.82 * swell);
+  }
+  return out;
+}
+function Waveform({ seed = "jawn", count = 40, stem, color, progress = 1, height = 40, gap = 2, style }) {
+  const data = seededBars(seed, count);
+  const fill = color || (stem ? `var(--stem-${stem})` : "var(--ink-2)");
+  return <div style={{ display: "flex", alignItems: "center", gap, height, width: "100%", ...style }}>
+    {data.map((v, i) => {
+      const played = i / data.length <= progress;
+      return <span key={i} style={{ flex: "1 1 0", minWidth: 1, height: `${Math.max(6, v * 100)}%`, background: fill, opacity: played ? 1 : 0.28, borderRadius: 999 }} />;
+    })}
+  </div>;
+}
+const Scrub = ({ children, onSeek }) => (
+  <div style={{ cursor: "pointer" }} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); onSeek(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))); }}>{children}</div>
+);
+
+/* file/record picker hook — returns a File from disk or mic */
+function useRecorder(onFile) {
+  const [recording, setRecording] = useState(false);
+  const ref = useRef(null);
+  const start = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream); const chunks = [];
+      mr.ondataavailable = (e) => chunks.push(e.data);
+      mr.onstop = () => { stream.getTracks().forEach((t) => t.stop()); onFile(new File(chunks, "recording.webm", { type: chunks[0] ? chunks[0].type : "audio/webm" })); setRecording(false); };
+      ref.current = mr; mr.start(); setRecording(true);
+    } catch (e) { alert("mic unavailable: " + e.message); }
+  };
+  const stop = () => { if (ref.current && ref.current.state !== "inactive") ref.current.stop(); };
+  return { recording, start, stop, toggle: () => (recording ? stop() : start()) };
+}
+
+/* ============================================================ App */
+function App() {
+  const [step, setStep] = useState("upload");      // upload | split | studio | finalize
+  const [data, setData] = useState(null);          // analysis.json of the loaded song
+  const [song, setSong] = useState(null);          // server folder name
+  const [swaps, setSwaps] = useState({});          // label -> {stem,fx,name,file,rawBuf}
+  const [bounce, setBounce] = useState(null);      // last medley render info (shared studio<->finalize)
+  const [mixView, setMixView] = useState("remix"); // orig | remix — what playback uses (shared)
+  const [toast, setToast] = useState(null);
+  const flash = (msg, err) => { setToast({ msg, err }); clearTimeout(flash._t); flash._t = setTimeout(() => setToast(null), err ? 4200 : 2600); };
+
+  const loadSong = async (name) => {
+    flash("loading " + name + " …");
+    const res = await fetch(asset(`output/${name}/analysis.json`), { cache: "no-store" });
+    if (!res.ok) throw new Error("could not load analysis.json");
+    const j = await res.json();
+    engReset(); setBounce(null); setMixView("remix");
+    setSong(name); setData(j); setStep("studio");
+    const ok = await loadStems(j, name);
+    flash(ok ? `loaded ${name} · ${ok}/4 stems` : "loaded (audio unavailable)", !ok);
+  };
+
+  const resetAll = () => { engReset(); setSwaps({}); setBounce(null); setMixView("remix"); setData(null); setSong(null); setStep("upload"); };
+
+  return (
+    <div className="app">
+      <div className="screen-wrap">
+        {step === "upload" && <Upload setStep={setStep} setSong={setSong} loadSong={loadSong} flash={flash} />}
+        {step === "split" && <Splitting song={song} setStep={setStep} loadSong={loadSong} flash={flash} reset={resetAll} />}
+        {step === "studio" && data && <Studio data={data} song={song} swaps={swaps} setSwaps={setSwaps} setStep={setStep} flash={flash} bounce={bounce} setBounce={setBounce} mix={mixView} setMix={setMixView} />}
+        {step === "finalize" && data && <Finalize data={data} song={song} swaps={swaps} setSwaps={setSwaps} setStep={setStep} flash={flash} bounce={bounce} setBounce={setBounce} mix={mixView} setMix={setMixView} />}
+      </div>
+      {toast && <div className={"toast" + (toast.err ? " err" : "")}>{toast.msg}</div>}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ Upload */
+function Upload({ setStep, setSong, loadSong, flash }) {
+  const fileRef = useRef(null);
+  const [songs, setSongs] = useState(null);        // null=closed, []=open list
+  const rec = useRecorder((f) => uploadSong(f));
+
+  const uploadSong = async (file) => {
+    flash("uploading " + file.name + " …");
+    try {
+      const res = await fetch(api(`/api/upload?name=${encodeURIComponent(file.name)}&sensitivity=${SENSITIVITY}`), { method: "POST", body: file });
+      if (!res.ok) throw new Error(await res.text());
+      const { job } = await res.json();
+      sessionStorage.setItem("jx_job", job); sessionStorage.setItem("jx_name", file.name);
+      setStep("split");
+    } catch (e) { flash("upload failed: " + e.message + " (is server.py running?)", true); }
+  };
+  const openSamples = async () => {
+    try {
+      const list = await (await fetch(api("/api/songs"))).json();
+      if (!list.length) return flash("no processed songs yet — upload one", true);
+      setSongs(list);
+    } catch (e) { flash("backend unreachable", true); }
+  };
+
+  return (
+    <div className="scr" style={{ justifyContent: "flex-start" }}>
+      <div className="brandmark" style={{ marginTop: 12 }}>
+        <i style={{ width: "100%", background: "var(--stem-vocals)" }} />
+        <i style={{ width: "64%", background: "var(--stem-drums)" }} />
+        <i style={{ width: "88%", background: "var(--stem-bass)" }} />
+        <i style={{ width: "46%", background: "var(--stem-other)" }} />
+      </div>
+      <div className="wordmark" style={{ marginTop: 12 }}>jawn<b>splitter</b></div>
+      <h1 className="bigtitle" style={{ fontSize: 44, lineHeight: .98, margin: "26px 0 0" }}>any song.<br />your <span style={{ color: "var(--brand)" }}>sound.</span></h1>
+      <p style={{ color: "var(--ink-2)", fontSize: 16, margin: "13px 0 0", maxWidth: "26ch", lineHeight: 1.4 }}>upload a track, swap the parts, post the remix.</p>
+
+      <input ref={fileRef} type="file" accept="audio/*,.mp3,.wav,.m4a" style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files[0]; if (f) uploadSong(f); }} />
+
+      <div className="dash" style={{ marginTop: 22, padding: "26px 18px", display: "flex", flexDirection: "column", gap: 11, alignItems: "center", cursor: "pointer" }} onClick={() => fileRef.current.click()}>
+        <div style={{ fontSize: 32 }}>⬆</div>
+        <div style={{ fontWeight: 700, fontSize: 17, color: "var(--ink-0)" }}>drop a song</div>
+        <div className="ph-foot">mp3 · wav · m4a</div>
+      </div>
+      <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+        <Button block size="lg" variant={rec.recording ? "primary" : "ghost"} onClick={rec.toggle}>{rec.recording ? "■ stop" : "● record"}</Button>
+        <Button block size="lg" variant="ghost" onClick={openSamples}>try a sample →</Button>
+      </div>
+      <div style={{ marginTop: "auto", marginBottom: 6, opacity: .45 }}><Waveform seed="hero-wave" count={52} height={24} color="var(--ink-3)" /></div>
+
+      {songs && (
+        <div className="scrim" onClick={() => setSongs(null)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <span className="grab" />
+            <div className="shead"><div style={{ flex: 1 }}><div className="st">try a sample</div><div className="ss">{songs.length} processed song{songs.length === 1 ? "" : "s"}</div></div>
+              <IconButton size="sm" onClick={() => setSongs(null)}>✕</IconButton></div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {songs.map((s) => (
+                <div className="lrow" key={s} style={{ cursor: "pointer" }} onClick={() => { setSongs(null); loadSong(s).catch((e) => flash(e.message, true)); }}>
+                  <span style={{ fontSize: 16 }}>🎵</span><span className="fn" style={{ flex: 1 }}>{s}</span><span style={{ color: "var(--ink-3)" }}>→</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ Splitting (real poll) */
+function Splitting({ song, setStep, loadSong, flash, reset }) {
+  const [pct, setPct] = useState(0);
+  const [stepText, setStepText] = useState("queued …");
+  const [shown, setShown] = useState(0);
+
+  useEffect(() => {
+    const job = sessionStorage.getItem("jx_job"); const name = sessionStorage.getItem("jx_name") || "your jawn";
+    if (!job) { setStep("upload"); return; }
+    const reveal = setInterval(() => setShown((n) => Math.min(4, n + 1)), 500);
+    const creep = setInterval(() => setPct((p) => Math.min(94, p + 2)), 900);   // indeterminate crawl; backend gives no %
+    const tick = setInterval(async () => {
+      let s;
+      try { s = await (await fetch(api("/api/status?job=" + job), { cache: "no-store" })).json(); } catch (e) { return; }
+      if (s.state === "queued") setStepText("queued …");
+      else if (s.state === "running") setStepText(s.step || "working …");
+      else if (s.state === "done") {
+        clearInterval(tick); clearInterval(creep); clearInterval(reveal); setPct(100);
+        sessionStorage.removeItem("jx_job");
+        try { await loadSong(s.song); } catch (e) { flash(e.message, true); }
+      } else if (s.state === "error") {
+        clearInterval(tick); clearInterval(creep); clearInterval(reveal);
+        flash("split failed: " + s.error, true); setStep("upload");
+      } else if (s.state === "unknown") {
+        clearInterval(tick); clearInterval(creep); clearInterval(reveal);
+        flash("job lost (server restarted?)", true); setStep("upload");
+      }
+    }, 1500);
+    return () => { clearInterval(tick); clearInterval(creep); clearInterval(reveal); };
+  }, []);
+
+  return (
+    <div className="scr" style={{ justifyContent: "center", gap: 24 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+        <div className="eyebrow">splitting your jawn</div>
+        <div className="bigtitle" style={{ fontSize: 28 }}>{sessionStorage.getItem("jx_name") || "your jawn"}</div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {STEMS.map((s, i) => (
+          <div key={s} style={{ display: "flex", alignItems: "center", gap: 10, opacity: i < shown ? 1 : .25, transform: i < shown ? "none" : "translateY(8px)", transition: "all .34s var(--ease-out)" }}>
+            <span style={{ width: 11, height: 11, borderRadius: "50%", flex: "none", background: `var(--stem-${s})` }} />
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--ink-2)", width: 50, flex: "none" }}>{s}</span>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}><Waveform stem={s} seed={s + "split"} count={38} height={26} progress={i < shown ? 1 : 0} /></div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="eyebrow" style={{ textTransform: "none", letterSpacing: ".02em", whiteSpace: "nowrap" }}>{stepText}</div>
+        <div style={{ flex: "1 1 0", height: 6, borderRadius: 999, background: "var(--stage-3)", overflow: "hidden" }}>
+          <div style={{ height: "100%", width: pct + "%", background: "var(--brand)", borderRadius: 999, transition: "width .4s var(--ease-out)" }} />
+        </div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-2)", minWidth: 34, textAlign: "right" }}>{pct}%</div>
+      </div>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", textAlign: "center" }}>this takes a few minutes</div>
+      <Button variant="ghost" size="sm" style={{ alignSelf: "center" }} onClick={reset}>cancel</Button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ Studio (timeline) */
+const PARTS = (data, stem) => ((data.layers || {})[stem] || []).filter((p) => p.repeated && p.occurrence_count > 1);
+const PPS = 16;   // pixels per second — keeps real single-bar parts tappable (scrolls)
+
+function Studio({ data, song, swaps, setSwaps, setStep, flash, bounce, setBounce, mix, setMix }) {
+  const [prog, setProg] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState({});
+  const [loopLabel, setLoopLabel] = useState(null);
+  const [sheet, setSheet] = useState(null);        // label being swapped
+  const [showList, setShowList] = useState(false);
+  const [rendering, setRendering] = useState(false);
+  const [renderMsg, setRenderMsg] = useState("");
+  const scrollRef = useRef(null);
+  const dur = data.duration_sec || 1;
+  const trackW = Math.max(1, dur * PPS);
+  const swapCount = Object.keys(swaps).length;
+  const curSig = sigOf(swaps);
+  const rendered = !!(bounce && bounce.sig === curSig && Eng.editedBuffers);  // remix matches current swaps
+
+  useEffect(() => { Eng.onTick = (t, d) => setProg(d ? t / d : 0); Eng.onState = setPlaying; return () => { Eng.onTick = null; Eng.onState = null; }; }, []);
+  useEffect(() => { Eng.muted = muted; applyGains(); }, [muted]);
+  // Point the engine at the right buffer set so the timeline's play button plays it:
+  // the rendered remix only when it's ready AND selected, otherwise the originals.
+  useEffect(() => {
+    Eng.buffers = (rendered && mix === "remix") ? Eng.editedBuffers : { ...(Eng.origBuffers || {}) };
+    if (Eng.playing) { const o = engTime(); engPause(); Eng.offset = o; engPlay(); }
+  }, [rendered, mix]);
+
+  // Render the medley for the current swaps, then play the remix right here on the timeline.
+  const doRender = async () => {
+    if (!swapCount || rendering) return;
+    engPause(); setRendering(true); setRenderMsg("preparing …");
+    try {
+      const info = await renderMedley(song, swaps, setRenderMsg);
+      setBounce(info); setMix("remix"); setRenderMsg("");
+      flash(`remix ready · ${info.slots_replaced} slots — press play ▶`);
+    } catch (e) { setRenderMsg(""); flash("render failed: " + e.message, true); }
+    setRendering(false);
+  };
+  // keep the playhead in view while playing
+  useEffect(() => {
+    const sc = scrollRef.current; if (!sc || !playing) return;
+    const x = 64 + prog * trackW;
+    if (x < sc.scrollLeft + 56 || x > sc.scrollLeft + sc.clientWidth - 90) sc.scrollLeft = x - sc.clientWidth * 0.3;
+  }, [prog, playing]);
+
+  // Just open the sheet — SwapSheet owns the loop preview (and its teardown), so
+  // there's exactly one reference source and closing the sheet always stops it.
+  const tapPart = (label) => { setLoopLabel(label); setSheet(label); };
+  const closeSheet = () => { setSheet(null); setLoopLabel(null); engStopReference(); };
+  const onUse = (label, swap) => { setSwaps((m) => ({ ...m, [label]: swap })); closeSheet(); flash(`swapped ${label} · fills ×${partOf(data, label).occurrence_count}`); };
+  const revert = (label) => setSwaps((m) => { const n = { ...m }; delete n[label]; return n; });
+
+  const sections = (data.sections || []);
+  return (
+    <div className="scr" style={{ padding: "16px 18px 0" }}>
+      <header style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="bigtitle" style={{ fontSize: 20, lineHeight: 1.05, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.song_id || song}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)" }}>{Math.round(data.tempo_bpm || 0)} BPM · {(data.key || "").toUpperCase()} · {fmt(dur)}</div>
+        </div>
+        <button onClick={() => setShowList(true)} disabled={!swapCount}
+          style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 12, background: swapCount ? "var(--brand)" : "var(--stage-3)", color: swapCount ? "#fff" : "var(--ink-3)", padding: "7px 12px", borderRadius: 999, border: "none", cursor: swapCount ? "pointer" : "default", boxShadow: swapCount ? "none" : "inset 0 0 0 1px var(--line)" }}>
+          🎚 {swapCount} swap{swapCount === 1 ? "" : "s"}</button>
+      </header>
+
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", margin: "13px 2px 11px" }}>tap a part to hear it + swap its sound</div>
+
+      <div ref={scrollRef} className="tlscroll" style={{ flex: "1 1 0", minHeight: 0 }}>
+        <div className="tl">
+          <div className="playhead" style={{ left: (64 + prog * trackW) + "px" }} />
+          {sections.length > 0 && (
+            <div className="tlane rlane" style={{ height: 14 }}>
+              <div className="lab" style={{ height: 14 }} />
+              <div className="track" style={{ width: trackW, height: 14, background: "transparent", boxShadow: "none" }}>
+                {sections.map((s, i) => <span key={i} className="rsec" style={{ left: s.start_sec * PPS }}>{s.label}</span>)}
+              </div>
+            </div>
+          )}
+          {STEMS.map((stem) => (
+            <Lane key={stem} data={data} stem={stem} pps={PPS} trackW={trackW} muted={muted[stem]} swaps={swaps} loopLabel={loopLabel}
+              onToggle={() => setMuted((m) => ({ ...m, [stem]: !m[stem] }))} onTap={tapPart} />
+          ))}
+        </div>
+      </div>
+
+      <div className="xport">
+        {swapCount > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            {rendered ? (
+              <div className="ab">
+                <button className={mix === "orig" ? "on" : ""} onClick={() => setMix("orig")}>original</button>
+                <button className={mix === "remix" ? "on" : ""} onClick={() => setMix("remix")}>your jawn</button>
+              </div>
+            ) : (
+              <Button size="sm" variant="primary" disabled={rendering} onClick={doRender}>{rendering ? "rendering…" : `⟳ render remix · ${swapCount}`}</Button>
+            )}
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: (rendered && mix === "remix") ? "var(--brand)" : "var(--ink-3)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {rendering ? renderMsg : rendered ? (mix === "remix" ? "🎚 playing your jawn — hit play" : "playing original") : "render to play your swaps on the timeline"}
+            </span>
+          </div>
+        )}
+        <Scrub onSeek={(f) => engSeek(f * dur)}><div style={{ marginBottom: 10 }}><Waveform seed={(rendered && mix === "remix" ? "remix" + curSig : "mixbus") + song} count={48} height={20} color={(rendered && mix === "remix") ? "var(--brand)" : "var(--ink-3)"} progress={prog} /></div></Scrub>
+        <div className="xrow">
+          <IconButton size="md" aria-label="restart" onClick={() => engSeek(0)}>⟲</IconButton>
+          <IconButton variant="brand" size="lg" active={playing} aria-label="play" onClick={() => (playing ? engPause() : engPlay())}>{playing ? "⏸" : "▶"}</IconButton>
+          <IconButton size="md" aria-label="forward" onClick={() => engSeek(Math.min(dur, prog * dur + dur * 0.12))}>⟳</IconButton>
+          <div className="xtime">{fmt(prog * dur)} <span>/ {fmt(dur)}</span></div>
+          <div style={{ flex: 1 }} />
+          <Button size="md" onClick={() => { engPause(); setStep("finalize"); }}>finalize →</Button>
+        </div>
+        {loopLabel && <div style={{ marginTop: 10 }}><span className="loop-pill">⟲ looping {loopLabel} ×{partOf(data, loopLabel).occurrence_count}</span></div>}
+      </div>
+
+      {sheet && <SwapSheet data={data} song={song} label={sheet} current={swaps[sheet]} onClose={closeSheet} onUse={onUse} flash={flash} />}
+      {showList && <SwapList data={data} swaps={swaps} onClose={() => setShowList(false)} onRevert={revert} onEdit={(l) => { setShowList(false); tapPart(l); }} />}
+    </div>
+  );
+}
+
+function Lane({ data, stem, pps, trackW, muted, swaps, loopLabel, onToggle, onTap }) {
+  const parts = PARTS(data, stem);
+  return (
+    <div className={"tlane" + (muted ? " muted" : "")}>
+      <div className="lab">
+        <div className="nm"><span className="dot" style={{ background: `var(--stem-${stem})` }} />{stem}</div>
+        <div className="ct" onClick={onToggle}>{muted ? "muted" : "on"}</div>
+      </div>
+      <div className="track" style={{ width: trackW }}>
+        {parts.flatMap((p) => {
+          // label the widest occurrence so every part is identifiable once
+          let wi = 0, ww = -1;
+          p.occurrences.forEach((o, i) => { const w = o.end_sec - o.start_sec; if (w > ww) { ww = w; wi = i; } });
+          const swapped = swaps[p.label]; const active = loopLabel === p.label; const lit = active || swapped;
+          const ring = `inset 0 0 0 ${active || swapped ? 2 : 1.4}px var(--stem-${stem})`;
+          const glow = swapped ? `, var(--glow-${stem})` : "";
+          return p.occurrences.map((occ, i) => {
+            const left = occ.start_sec * pps;
+            const width = Math.max(7, (occ.end_sec - occ.start_sec) * pps);
+            return (
+              <button key={p.label + i} className="blk" onClick={() => onTap(p.label)}
+                style={{ left, width, boxShadow: ring + glow, background: lit ? `var(--stem-${stem}-soft)` : "var(--stage-3)" }}>
+                {i === wi && width > 24 && <span className="bt">{p.label}<span className="x">×{p.occurrence_count}</span></span>}
+                {swapped && <span className="fxm">🎚</span>}
+              </button>
+            );
+          });
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ Trim panel
+   Real-waveform trim of the chosen (fx-baked) sound: two drag handles + a movable
+   selection window, capped to `cap` seconds so the replacement fits the part. Wheel /
+   ± buttons zoom the viewport so a long upload's short selection stays grabbable.
+   Ported from visualizer.html's trim panel, adapted to React + pointer events. */
+function zoomTo(dur, sel, cap, factor) {
+  const selLen = Math.max(0.05, sel.end - sel.start);
+  const want = factor != null ? factor : Math.max(selLen * 2.5, selLen + 0.3);
+  const span = Math.max(0.2, Math.min(dur, want));
+  const center = (sel.start + sel.end) / 2;
+  const s = Math.max(0, Math.min(center - span / 2, dur - span));
+  return { start: s, end: s + span };
+}
+function TrimPanel({ buf, trim, setTrim, cap, view, setView }) {
+  const wrapRef = useRef(null), cvRef = useRef(null);
+  const trimRef = useRef(trim); trimRef.current = trim;
+  const viewRef = useRef(view); viewRef.current = view;
+  const drag = useRef(null), winAnchor = useRef(null);
+  const dur = buf ? buf.duration : 0;
+  const span = Math.max(0.05, view.end - view.start);
+  const pct = (t) => ((t - view.start) / span) * 100;
+  const cl = (v) => Math.max(0, Math.min(100, v));
+
+  // draw the waveform for the current viewport (min/max peaks per column)
+  useEffect(() => {
+    const cv = cvRef.current, wrap = wrapRef.current; if (!cv || !wrap || !buf) return;
+    const w = wrap.clientWidth, h = wrap.clientHeight, dpr = window.devicePixelRatio || 1;
+    cv.width = w * dpr; cv.height = h * dpr;
+    const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const d = bufToMono(buf), sr = buf.sampleRate;
+    const a0 = Math.max(0, Math.floor(view.start * sr)), a1 = Math.min(d.length, Math.ceil(view.end * sr));
+    const n = Math.max(1, a1 - a0), step = n / w, mid = h / 2;
+    ctx.fillStyle = "rgba(255,46,116,.75)";
+    for (let x = 0; x < w; x++) {
+      const s = a0 + Math.floor(x * step), e = Math.min(a1, a0 + Math.floor((x + 1) * step));
+      let mn = 0, mx = 0;
+      for (let i = s; i < e; i++) { const v = d[i]; if (v < mn) mn = v; if (v > mx) mx = v; }
+      const y1 = mid - mx * mid, y2 = mid - mn * mid;
+      ctx.fillRect(x, y1, 1, Math.max(1, y2 - y1));
+    }
+  }, [buf, view.start, view.end]);
+
+  // pointer drag (handlers read refs so window listeners never go stale)
+  const onMove = (e) => {
+    if (!drag.current || !buf) return;
+    const vw = viewRef.current, tr = trimRef.current, sp = Math.max(0.05, vw.end - vw.start);
+    const r = wrapRef.current.getBoundingClientRect();
+    const xT = (cx) => vw.start + ((cx - r.left) / r.width) * sp;
+    const gap = Math.min(0.02, dur * 0.02);
+    if (drag.current === "window") {
+      const len = tr.end - tr.start;
+      let ns = Math.max(0, Math.min(winAnchor.current.start + (xT(e.clientX) - xT(winAnchor.current.px)), dur - len));
+      setTrim({ start: ns, end: ns + len });
+      const margin = sp * 0.12;                       // pan the view to keep the window in sight
+      if (ns < vw.start + margin) { const s = Math.max(0, ns - margin); setView({ start: s, end: s + sp }); }
+      else if (ns + len > vw.end - margin) { const s = Math.min(dur - sp, ns + len + margin - sp); setView({ start: s, end: s + sp }); }
+      return;
+    }
+    const t = xT(e.clientX);
+    if (drag.current === "start") setTrim({ start: Math.max(Math.max(0, tr.end - cap), Math.min(t, tr.end - gap)), end: tr.end });
+    else setTrim({ start: tr.start, end: Math.min(Math.min(dur, tr.start + cap), Math.max(t, tr.start + gap)) });
+  };
+  const moveRef = useRef(); moveRef.current = onMove;
+  const fns = useRef(null);
+  if (!fns.current) {
+    const mv = (e) => moveRef.current(e);
+    const up = () => { drag.current = null; winAnchor.current = null; window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
+    fns.current = { mv, up };
+  }
+  const startDrag = (which) => (e) => {
+    e.preventDefault(); e.stopPropagation(); drag.current = which;
+    if (which === "window") winAnchor.current = { px: e.clientX, start: trimRef.current.start };
+    window.addEventListener("pointermove", fns.current.mv); window.addEventListener("pointerup", fns.current.up);
+  };
+  useEffect(() => () => { window.removeEventListener("pointermove", fns.current.mv); window.removeEventListener("pointerup", fns.current.up); }, []);
+
+  // wheel zoom (anchored on the cursor) — native listener so we can preventDefault
+  useEffect(() => {
+    const wrap = wrapRef.current; if (!wrap) return;
+    const onWheel = (e) => {
+      if (!buf) return; e.preventDefault();
+      const vw = viewRef.current, sp = Math.max(0.05, vw.end - vw.start), r = wrap.getBoundingClientRect();
+      const frac = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), anchor = vw.start + frac * sp;
+      const ns = Math.max(0.2, Math.min(dur, sp * (e.deltaY > 0 ? 1.2 : 1 / 1.2)));
+      const s = Math.max(0, Math.min(anchor - frac * ns, dur - ns));
+      setView({ start: s, end: s + ns });
+    };
+    wrap.addEventListener("wheel", onWheel, { passive: false });
+    return () => wrap.removeEventListener("wheel", onWheel);
+  }, [buf, dur]);
+
+  const sx = pct(trim.start), ex = pct(trim.end);
+  return (
+    <div ref={wrapRef} className="jx-trim">
+      <canvas ref={cvRef} />
+      <div className="jx-shade" style={{ left: 0, width: cl(sx) + "%" }} />
+      <div className="jx-shade" style={{ left: cl(ex) + "%", width: Math.max(0, 100 - cl(ex)) + "%" }} />
+      <div className="jx-win" style={{ left: cl(sx) + "%", width: Math.max(0, cl(ex) - cl(sx)) + "%" }} onPointerDown={startDrag("window")} />
+      {sx >= 0 && sx <= 100 && <div className="jx-handle" style={{ left: sx + "%" }} onPointerDown={startDrag("start")} />}
+      {ex >= 0 && ex <= 100 && <div className="jx-handle" style={{ left: ex + "%" }} onPointerDown={startDrag("end")} />}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ Swap sheet */
+function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
+  const stem = stemOf(data, label); const part = partOf(data, label);
+  const cap = partMaxLen(part);                           // longest the replacement may run
+  const [swap, setSwap] = useState(current || null);     // {name,fx,rawBuf,file,trim}
+  const [ab, setAb] = useState(current ? "new" : "orig");
+  const [paused, setPaused] = useState(false);           // preview loop play/pause
+  const [busy, setBusy] = useState(false);
+  const [baked, setBaked] = useState(null);              // fx-baked AudioBuffer (waveform + trim)
+  const [view, setView] = useState({ start: 0, end: cap });  // trim zoom viewport
+  const fileRef = useRef(null);
+  const prevDur = useRef(0);                             // last baked duration (re-fit trim on fx change)
+  const previewSrc = useRef(null);                       // the looping "your sound" source
+  const rec = useRecorder((f) => chooseSound(f));
+  const setTrim = (t) => setSwap((s) => s ? { ...s, trim: (typeof t === "function" ? t(s.trim || { start: 0, end: 0 }) : t) } : s);
+  const trim = (swap && swap.trim) || { start: 0, end: 0 };
+
+  // Bake fx into a buffer for the waveform/trim, then re-fit the selection to the new
+  // length: keep "whole clip" selected if it was, else clamp into [0,dur]∩cap. (Effects
+  // like chipmunk/echo change the length, so the trim must follow.)
+  useEffect(() => {
+    if (!swap || !swap.rawBuf) { setBaked(null); return; }
+    let cancelled = false;
+    (async () => {
+      let b; try { b = await renderFx(swap.rawBuf, swap.fx); } catch (e) { b = swap.rawBuf; }
+      if (cancelled) return;
+      const dur = b.duration, prev = prevDur.current, cur = swap.trim;
+      const wasFull = !(cur && cur.end > cur.start) || (prev > 0 && cur.start <= 1e-3 && cur.end >= prev - 1e-3);
+      let nt;
+      if (wasFull) nt = { start: 0, end: Math.min(dur, cap) };
+      else { const st = Math.max(0, Math.min(cur.start, dur)); nt = { start: st, end: Math.min(dur, st + cap, Math.max(cur.end, st + 0.02)) }; }
+      prevDur.current = dur;
+      setBaked(b); setTrim(nt); setView(zoomTo(dur, nt, cap));
+    })();
+    return () => { cancelled = true; };
+  }, [swap && swap.rawBuf, swap && swap.fx.join(",")]);
+
+  // A/B preview loop: "original" loops the reference clip, "your sound" loops the
+  // baked buffer's *trimmed* region. Honors `paused`, and always tears down on unmount
+  // — so closing the sheet (or pausing, or flipping A/B) stops the loop cleanly.
+  useEffect(() => {
+    let cancelled = false; previewSrc.current = null;
+    engStopReference();
+    if (!paused && ab === "orig") {
+      playReference(song, label).catch((e) => { if (!cancelled) flash("preview unavailable", true); });
+    } else if (!paused && ab === "new" && baked) {
+      const ctx = ensureCtx(); const src = ctx.createBufferSource(); src.buffer = baked;
+      const tr = (swap && swap.trim) || { start: 0, end: baked.duration };
+      src.loop = true; src.loopStart = tr.start; src.loopEnd = Math.max(tr.start + 0.02, tr.end);
+      src.connect(Eng.master); try { src.start(0, tr.start); } catch (e) {}
+      previewSrc.current = src;
+    }
+    return () => { cancelled = true; engStopReference(); if (previewSrc.current) { try { previewSrc.current.stop(); } catch (e) {} previewSrc.current = null; } };
+  }, [ab, paused, baked]);
+
+  // keep the looping preview's region in sync while dragging the handles (no restart)
+  useEffect(() => {
+    const s = previewSrc.current; if (!s) return;
+    s.loopStart = trim.start; s.loopEnd = Math.max(trim.start + 0.02, trim.end);
+  }, [trim.start, trim.end]);
+
+  const chooseSound = async (file) => {
+    let rawBuf = null;
+    try { rawBuf = await decodeFile(file); } catch (e) { flash("can't preview this format — will upload raw", true); }
+    prevDur.current = 0;
+    setSwap({ name: file.name, fx: [], file, rawBuf, stem, trim: { start: 0, end: 0 } }); setAb("new");
+  };
+  const toggleFx = (id) => setSwap((s) => ({ ...s, fx: s.fx.includes(id) ? s.fx.filter((x) => x !== id) : [...s.fx, id] }));
+  const zoomView = (factor) => baked && setView(zoomTo(baked.duration, trim, cap, Math.max(0.2, (view.end - view.start) * factor)));
+  const resetTrim = () => { if (!baked) return; const nt = { start: 0, end: Math.min(baked.duration, cap) }; setTrim(nt); setView(zoomTo(baked.duration, nt, cap)); };
+
+  const use = async () => {
+    if (!swap) return;
+    setBusy(true);
+    try {
+      const file = await bakeSwapFile(swap);
+      onUse(label, { stem, fx: swap.fx, name: swap.name, file, rawBuf: swap.rawBuf, trim: swap.trim });
+    } catch (e) { flash("could not prepare sound: " + e.message, true); setBusy(false); }
+  };
+
+  return (
+    <div className="scrim" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <span className="grab" />
+        <div className="shead">
+          <div style={{ flex: 1 }}>
+            <div className="st">swap this part</div>
+            <div className="ss">{stem} · {label} · ×{part.occurrence_count}</div>
+          </div>
+          <IconButton size="sm" aria-label="close" onClick={onClose}>✕</IconButton>
+        </div>
+
+        <div className="auline">
+          <div className="ab">
+            <button className={ab === "orig" ? "on" : ""} onClick={() => setAb("orig")}>original</button>
+            <button className={ab === "new" ? "on" : ""} onClick={() => setAb("new")} disabled={!swap}>your sound</button>
+          </div>
+          <button className="loop-pill" onClick={() => setPaused((p) => !p)} style={{ border: "none", cursor: "pointer" }}>
+            {paused ? "▶ play loop" : "⏸ loops this part"}</button>
+        </div>
+
+        <div>
+          <div className="lbl" style={{ marginBottom: 6 }}>current part</div>
+          <div className={"cmp" + (ab === "orig" ? " act" : "")}>
+            <Waveform stem={stem} seed={label + "orig"} count={46} height={42} progress={1} />
+            <span className="cn">{label}</span>
+          </div>
+        </div>
+
+        <div className="vs">↓ replace with ↓</div>
+
+        <input ref={fileRef} type="file" accept="audio/*,.mp3,.wav,.m4a" style={{ display: "none" }}
+          onChange={(e) => { const f = e.target.files[0]; if (f) chooseSound(f); }} />
+
+        <div>
+          <div className="lbl" style={{ marginBottom: 6 }}>your sound</div>
+          {swap ? (
+            <React.Fragment>
+              <div className={"cmp" + (ab === "new" ? " act" : "")}>
+                <Waveform seed={swap.name + swap.fx.join("")} count={46} height={42} color="var(--brand)" progress={1} />
+                <span className="cn b">🎚 {swap.name}{swap.fx.length ? " · " + swap.fx.length + "fx" : ""}</span>
+              </div>
+              {baked && (
+                <React.Fragment>
+                  <div className="lbl" style={{ margin: "11px 0 6px" }}>trim · drag the handles to fit {label} (max {cap.toFixed(2)}s)</div>
+                  <TrimPanel buf={baked} trim={trim} setTrim={setTrim} cap={cap} view={view} setView={setView} />
+                  <div className="trimbar">
+                    <span className="info">using {(trim.end - trim.start).toFixed(2)}s of {baked.duration.toFixed(2)}s{baked.duration > cap + 1e-3 ? ` · max ${cap.toFixed(2)}s to fit` : ""}</span>
+                    <button className="zb" aria-label="zoom out" onClick={() => zoomView(1.5)}>−</button>
+                    <button className="zb" aria-label="zoom in" onClick={() => zoomView(1 / 1.5)}>+</button>
+                    <button className="tx" onClick={resetTrim}>fit</button>
+                    <button className="tx" onClick={() => { setAb("new"); setPaused(false); }}>▶ preview</button>
+                  </div>
+                </React.Fragment>
+              )}
+              <div className="lbl" style={{ margin: "11px 0 6px" }}>effects · tap to bake on{!swap.rawBuf ? " (unavailable for this file)" : ""}</div>
+              <div className="fxwrap">
+                {FX_ORDER.map((id) => (
+                  <button key={id} className={"fxb" + (swap.fx.includes(id) ? " on" : "")} disabled={!swap.rawBuf} onClick={() => toggleFx(id)}>{FX[id].e} {FX[id].name}</button>
+                ))}
+              </div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", marginTop: 9, lineHeight: 1.45, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <button onClick={() => { setSwap(null); setAb("orig"); }} style={{ fontFamily: "var(--font-mono)", fontSize: 11, background: "var(--stage-3)", boxShadow: "inset 0 0 0 1px var(--line)", color: "var(--ink-1)", border: "none", borderRadius: 999, padding: "5px 10px", cursor: "pointer" }}>↩ change file</button>
+                <span>effects bake into your sound · fills all ×{part.occurrence_count} spots</span>
+              </div>
+            </React.Fragment>
+          ) : (
+            <div className="drop" onClick={() => fileRef.current.click()}>
+              <div style={{ fontSize: 26 }}>⬆</div>
+              <div>choose your sound</div>
+              <div className="row">
+                <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); fileRef.current.click(); }}>⬆ upload</Button>
+                <Button size="sm" variant={rec.recording ? "primary" : "ghost"} onClick={(e) => { e.stopPropagation(); rec.toggle(); }}>{rec.recording ? "■ stop" : "● record"}</Button>
+              </div>
+              <div className="mini">your file, placed raw — then add effects</div>
+            </div>
+          )}
+        </div>
+
+        <Button block size="lg" disabled={!swap || busy} onClick={use} style={{ marginTop: 2 }}>
+          {busy ? "preparing…" : (current ? "update swap →" : "use it →")}</Button>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ Swap list */
+function SwapList({ data, swaps, onClose, onRevert, onEdit }) {
+  const entries = Object.entries(swaps);
+  return (
+    <div className="scrim" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <span className="grab" />
+        <div className="shead">
+          <div style={{ flex: 1 }}><div className="st">your swaps</div><div className="ss">{entries.length} part{entries.length === 1 ? "" : "s"} replaced</div></div>
+          <IconButton size="sm" aria-label="close" onClick={onClose}>✕</IconButton>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {entries.map(([label, v]) => (
+            <div className="lrow" key={label}>
+              <StemTag stem={v.stem} label={label} count={partOf(data, label).occurrence_count} />
+              <span style={{ color: "var(--ink-3)" }}>→</span>
+              <span className="fn" onClick={() => onEdit(label)} style={{ cursor: "pointer", flex: 1 }}>🎚 {v.name}</span>
+              <span className="fxm">{v.fx.map((id) => FX[id].e).join(" ") || "raw"}</span>
+              <button className="rv" aria-label="revert" onClick={() => onRevert(label)}>↩</button>
+            </div>
+          ))}
+        </div>
+        <Button block size="lg" onClick={onClose} style={{ marginTop: 4 }}>done — back to timeline</Button>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ Finalize (review + export) */
+function Finalize({ data, song, swaps, setSwaps, setStep, flash, bounce, setBounce, mix, setMix }) {
+  const ab = mix, setAb = setMix;                   // A/B choice is shared with the studio toggle
+  const [prog, setProg] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [status, setStatus] = useState("");
+  const dur = data.duration_sec || 1;
+  const entries = Object.entries(swaps);
+  const sig = sigOf(swaps);
+  const ready = !!(bounce && bounce.sig === sig && Eng.editedBuffers);  // render matches current swaps
+
+  useEffect(() => { Eng.onTick = (t, d) => setProg(d ? t / d : 0); Eng.onState = setPlaying; return () => { Eng.onTick = null; Eng.onState = null; }; }, []);
+
+  // Make sure a render exists for the current swaps — reuse the studio's if it matches,
+  // otherwise render now (covers landing here without rendering on the timeline first).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      engPause();
+      if (!entries.length) { Eng.editedBuffers = null; Eng.buffers = { ...(Eng.origBuffers || {}) }; setBounce(null); setStatus("no swaps yet — go back and replace a part"); return; }
+      if (ready) { Eng.buffers = ab === "remix" ? Eng.editedBuffers : { ...(Eng.origBuffers || {}) }; setStatus(`ready — ${bounce.slots_replaced} slots across the ${Math.round(bounce.duration_sec)}s song ▶`); return; }
+      try {
+        const info = await renderMedley(song, swaps, setStatus);
+        if (cancelled) return;
+        setBounce(info); Eng.buffers = ab === "remix" ? Eng.editedBuffers : { ...(Eng.origBuffers || {}) };
+        setStatus(`done — ${info.slots_replaced} slots across the ${Math.round(info.duration_sec)}s song ▶`);
+      } catch (e) { if (!cancelled) { setStatus("render failed: " + e.message); flash(e.message, true); } }
+    })();
+    return () => { cancelled = true; };
+  }, [sig]);
+
+  // flip the active buffer set on A/B without re-rendering
+  useEffect(() => {
+    if (!Eng.editedBuffers) return;
+    Eng.buffers = ab === "remix" ? Eng.editedBuffers : { ...(Eng.origBuffers || {}) };
+    if (Eng.playing) { const o = Eng.offset + (engNow() - Eng.ctxStart); engPause(); Eng.offset = o; engPlay(); }
+  }, [ab]);
+
+  const isRemix = ab === "remix";
+  const revert = (label) => setSwaps((m) => { const n = { ...m }; delete n[label]; return n; });
+  const exportJawn = () => { if (!bounce) return; const rel = bounce.paths.mp3 || bounce.paths.wav; const a = document.createElement("a"); a.href = asset(rel); a.download = (data.song_id || song) + "-jawn." + (rel.split(".").pop()); a.click(); };
+
+  return (
+    <div className="scr" style={{ padding: "16px 18px 0" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <IconButton size="sm" aria-label="back" onClick={() => { engPause(); Eng.buffers = { ...(Eng.origBuffers || {}) }; setStep("studio"); }}>‹</IconButton>
+        <div><div className="eyebrow">finalize · the whole jawn</div></div>
+      </div>
+      <div className="bigtitle" style={{ fontSize: 32, margin: "8px 0 14px" }}>{entries.length ? "your jawn" : "finalize"}</div>
+
+      <div style={{ background: "var(--surface)", borderRadius: "var(--r-xl)", padding: 15, boxShadow: "inset 0 0 0 1px var(--stem-bass)", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div className="bigtitle" style={{ fontSize: 17, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{data.song_id || song}</div>
+          <div className="ab">
+            <button className={!isRemix ? "on" : ""} onClick={() => setAb("orig")}>original</button>
+            <button className={isRemix ? "on" : ""} onClick={() => setAb("remix")} disabled={!entries.length}>your jawn</button>
+          </div>
+        </div>
+        <Scrub onSeek={(f) => engSeek(f * dur)}><Waveform seed={(isRemix ? "remix" + sig : "orig") + song} count={54} height={46} color={isRemix ? "var(--brand)" : "var(--ink-3)"} progress={prog} /></Scrub>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <IconButton size="md" aria-label="restart" onClick={() => engSeek(0)}>⟲</IconButton>
+          <IconButton variant="brand" size="lg" active={playing} aria-label="play" onClick={() => (playing ? engPause() : engPlay())}>{playing ? "⏸" : "▶"}</IconButton>
+          <div className="xtime">{fmt(prog * dur)} <span>/ {fmt(dur)}</span></div>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: isRemix ? "var(--brand)" : "var(--ink-3)" }}>{isRemix ? "🎚 " + entries.length + " live" : "untouched"}</span>
+        </div>
+      </div>
+
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", margin: "10px 2px 0" }}>{status}</div>
+
+      <div className="eyebrow" style={{ margin: "16px 2px 9px" }}>changes in this mix</div>
+      <div style={{ flex: "1 1 0", minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 7 }}>
+        {entries.length === 0 && <div style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontSize: 12, padding: "8px 2px" }}>no swaps yet — go back and replace a part.</div>}
+        {entries.map(([label, v]) => (
+          <div className="lrow" key={label}>
+            <StemTag stem={v.stem} label={label} count={partOf(data, label).occurrence_count} />
+            <span style={{ color: "var(--ink-3)" }}>→</span>
+            <span className="fn" style={{ flex: 1 }}>🎚 {v.name}</span>
+            <span className="fxm">{v.fx.map((id) => FX[id].e).join(" ") || "raw"}</span>
+            <button className="rv" aria-label="revert" onClick={() => revert(label)}>↩</button>
+          </div>
+        ))}
+      </div>
+
+      <div className="xport" style={{ margin: "8px -18px 0" }}>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Button block size="lg" variant="ghost" onClick={() => { engPause(); Eng.buffers = { ...(Eng.origBuffers || {}) }; setStep("studio"); }}>‹ keep editing</Button>
+          <Button block size="lg" disabled={!ready} onClick={exportJawn}>export jawn →</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("app")).render(<App />);
+</script>
+</body>
+</html>

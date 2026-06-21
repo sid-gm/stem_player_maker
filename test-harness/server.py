@@ -260,6 +260,7 @@ class Handler(SimpleHTTPRequestHandler):
         body = json.loads(self.rfile.read(length) or b"{}")
         song = body.get("song")
         name = body.get("name") or "medley"
+        confine = bool(body.get("confine"))   # mobile: fit each sound to its part
         song_dir = OUT / (song or "")
         if not song or not (song_dir / "analysis.json").exists():
             return self._send_json({"error": "no such song"}, 404)
@@ -281,7 +282,7 @@ class Handler(SimpleHTTPRequestHandler):
             placements.append({"label": label, "sample": sample})
         try:
             info = render_medley(song_dir, placements, out_name=Path(name).name or "medley",
-                                 write_stems=True)
+                                 write_stems=True, confine=confine)
             self._send_json(self._rel_paths(info))
         except SystemExit as exc:  # bad label / missing stem
             self._send_json({"error": str(exc)}, 400)

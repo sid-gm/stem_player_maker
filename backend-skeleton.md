@@ -163,7 +163,7 @@ bounce. Two-step: stash each sample, then render referencing them by id.
 | Method | Endpoint | Body / Query | Returns |
 |---|---|---|---|
 | `POST` | `/api/sample?name=<filename>` | **raw audio bytes** in body | `{"id": "<sample_id>", "name": "<filename>"}` |
-| `POST` | `/api/render-medley` | `{"song", "placements": [{"label", "sample_id"?}], "name"?}` | same shape as `/api/render` (incl. `placements[]`, `slots_replaced`, `paths`, `stems`) |
+| `POST` | `/api/render-medley` | `{"song", "placements": [{"label", "sample_id"?}], "name"?, "confine"?}` | same shape as `/api/render` (incl. `placements[]`, `slots_replaced`, `paths`, `stems`) |
 
 ### Flow / connectors
 
@@ -179,6 +179,11 @@ bounce. Two-step: stash each sample, then render referencing them by id.
    whatever stems are involved; touched stems are edited copies, untouched stems pass
    through; summed + peak-normalized → WAV + MP3 (+ per-stem WAVs for timeline
    playback).
+5. **`confine`** (mobile/jawnsplitter sends `true`): place the sample **once per
+   occurrence, trimmed to that occurrence's length** — so the sound fits exactly the
+   part it replaces (no per-bar retrigger, no ringing past into the next part), and
+   `slots_replaced` counts occurrences. Default `false` keeps the desktop visualizer's
+   "messy medley": the raw sample is dropped at every *bar* and may ring past its slot.
 
 ### Why two steps
 
