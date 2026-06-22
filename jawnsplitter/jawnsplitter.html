@@ -248,7 +248,7 @@ const Eng = {
   ctx: null, master: null, buffers: {}, origBuffers: null, editedBuffers: null, analysis: null,
   gains: {}, sources: null, refSrc: null, refGen: 0, muted: {},
   playing: false, silent: false, ctxStart: 0, offset: 0, raf: null, dur: 0,
-  onTick: null, onState: null,
+  onTick: null, onState: null, autoplay: false,
 };
 function ensureCtx() {
   if (!Eng.ctx) {
@@ -322,10 +322,9 @@ async function fetchDecode(url) {
   return await ctx.decodeAudioData(await res.arrayBuffer());
 }
 async function loadStems(data, song) {
-  // Decode into a LOCAL object, not the shared Eng.buffers: Studio mounts while this
-  // runs (loadSong flips to "studio" before awaiting us) and its mount effect reassigns
-  // Eng.buffers mid-load. Mutating Eng.buffers across awaits would let that reassignment
-  // orphan whatever already decoded (the first stem, vocals). Assign atomically at the end.
+  // Decode into a LOCAL object and assign Eng.buffers atomically at the end. loadSong now
+  // awaits this fully before flipping to the studio, so Studio mounts only after the
+  // buffers are in place — but the atomic assign stays robust if a reload ever races a mount.
   const buffers = {}; Eng.dur = data.duration_sec || 0; Eng.analysis = data;  // kept for client-side part previews
   let ok = 0;
   for (const s of (data.stems || [])) {
@@ -491,11 +490,120 @@ async function bakeSwapFile(swap) {
   return new File([blob], base + (swap.fx.length ? "_fx" : "") + (trimmed ? "_trim" : "") + ".wav", { type: "audio/wav" });
 }
 
-/* Render the medley for the current swaps: upload each baked sample (POST /api/sample),
-   bounce them in one mix (POST /api/render-medley), then decode the edited per-stem WAVs
-   into Eng.editedBuffers so playback can A/B against the originals gaplessly. Returns the
-   server render info, stamped with the swap `sig` so callers know which swaps it covers.
-   Shared by the studio (timeline remix playback) and finalize (export). */
+/* ---- CLIENT-SIDE SPLICE: build the remix in the browser, no Modal round-trip ----
+   The swap's effects are already baked client-side (renderFx). Placement is the only
+   thing the server used to do, and it edits just ONE stem — so we replicate
+   render.render_medley(confine=True) here on the decoded buffers we already hold:
+   level-match the sample to the stem's loudness, then drop it ONCE per occurrence
+   (trimmed to the occurrence length), edge-faded, with a short leading crossfade from
+   the original stem. Instant + free; the server render is kept only for export. */
+
+/* per-stem target loudness from analysis.json (stems[].loudness_lufs, keyed by type) */
+function stemLufs(data, stem) {
+  const s = (data.stems || []).find((x) => x.type === stem);
+  return s && typeof s.loudness_lufs === "number" ? s.loudness_lufs : null;
+}
+/* linear gain so mono `y` hits `target` LUFS. Uses an RMS-dBFS proxy (= dsp.measure_lufs's
+   own fallback); the server's pyloudnorm match is a touch more exact, so an exported
+   bounce may differ by a dB or two — fine for an in-mix preview. */
+function gainToLufs(y, target) {
+  if (target == null || !y.length) return 1;
+  let sum = 0; for (let i = 0; i < y.length; i++) sum += y[i] * y[i];
+  const rms = Math.sqrt(sum / y.length);
+  if (rms <= 0) return 1;
+  return Math.pow(10, (target - 20 * Math.log10(rms)) / 20);
+}
+/* linear fade in/out of `n` samples, in place (mirror of dsp.edge_fade) */
+function edgeFade(y, n) {
+  if (n <= 0 || 2 * n >= y.length) return y;
+  for (let i = 0; i < n; i++) { const r = i / n; y[i] *= r; y[y.length - 1 - i] *= r; }
+  return y;
+}
+/* Overwrite mono `repl` into every channel of stereo `dst` at sample `start`,
+   crossfading the leading `xf` samples from the original audio into the sample so the
+   seam doesn't click (mirror of render._place; confined placement = overwrite, not sum). */
+function placeMono(dst, start, repl, xf) {
+  const end = Math.min(start + repl.length, dst.length);
+  const n = end - start; if (n <= 0) return;
+  const k = Math.min(xf, n);
+  for (let ch = 0; ch < dst.numberOfChannels; ch++) {
+    const d = dst.getChannelData(ch);
+    for (let i = 0; i < n; i++) {
+      let v = repl[i];
+      if (i < k) { const r = i / k; v = d[start + i] * (1 - r) + v * r; }
+      d[start + i] = v;
+    }
+  }
+}
+/* bake fx + trim into a mono Float32 (own copy, safe to mutate) at the engine sample rate */
+async function bakeSwapBuffer(swap) {
+  if (!swap.rawBuf) return null;
+  const baked = await renderFx(swap.rawBuf, swap.fx);
+  const sr = baked.sampleRate;
+  let mono = bufToMono(baked);
+  const tr = swap.trim;
+  if (tr && (tr.start > 1e-3 || tr.end < baked.duration - 1e-3) && tr.end > tr.start) {
+    const s = Math.max(0, Math.floor(tr.start * sr));
+    const e = Math.min(mono.length, Math.ceil(tr.end * sr));
+    mono = mono.slice(s, Math.max(s + 1, e));
+  } else {
+    mono = mono.slice();
+  }
+  return { mono, sr };
+}
+/* Build the remixed stem buffers entirely client-side. Returns {editedBuffers, slots}.
+   editedBuffers = originals everywhere, with touched stems replaced by edited copies. */
+async function buildEditedBuffers(data, swaps) {
+  const ctx = ensureCtx();
+  const orig = Eng.origBuffers || {};
+  const edited = { ...orig };
+  const writable = {};                       // stem -> mutable AudioBuffer copy (one per touched stem)
+  let slots = 0;
+  for (const [label, swap] of Object.entries(swaps)) {
+    const stem = stemOf(data, label);
+    const part = partOf(data, label);
+    const src = stem && orig[stem];
+    if (!stem || !part || !src) continue;
+    const baked = await bakeSwapBuffer(swap);
+    if (!baked || !baked.mono.length) continue;
+    const sr = src.sampleRate;
+    // baked sr == stem sr (both decoded at ctx.sampleRate); guard anyway
+    if (Math.abs(baked.sr - sr) > 1) continue;
+    let sample = baked.mono;
+    const g = gainToLufs(sample, stemLufs(data, stem));   // level-match once (lufs is per-stem)
+    if (g !== 1) for (let i = 0; i < sample.length; i++) sample[i] *= g;
+    if (!writable[stem]) {
+      const w = ctx.createBuffer(src.numberOfChannels, src.length, sr);
+      for (let ch = 0; ch < src.numberOfChannels; ch++) w.copyToChannel(src.getChannelData(ch).slice(), ch, 0);
+      writable[stem] = w; edited[stem] = w;
+    }
+    const dst = writable[stem];
+    const fadeN = Math.round(0.005 * sr);      // 5ms edge fade (dsp.edge_fade default)
+    const xf = Math.round(0.008 * sr);         // 8ms leading crossfade (render.render_medley default)
+    for (const occ of (part.occurrences || [])) {
+      const n = Math.round((occ.end_sec - occ.start_sec) * sr);
+      if (n <= 0) continue;
+      const piece = sample.subarray(0, Math.min(n, sample.length)).slice();   // confine to occ length
+      edgeFade(piece, fadeN);
+      placeMono(dst, Math.round(occ.start_sec * sr), piece, xf);
+      slots++;
+    }
+  }
+  return { editedBuffers: edited, slots };
+}
+/* Build the remix locally and point Eng.editedBuffers at it. Instant (effects already
+   baked, placement is array math). Returns a server-bounce-shaped info object (minus
+   `paths`) so the UI reads the same fields. */
+async function previewMedley(data, song, swaps) {
+  const { editedBuffers, slots } = await buildEditedBuffers(data, swaps);
+  Eng.editedBuffers = editedBuffers;
+  return { sig: sigOf(swaps), slots_replaced: slots, duration_sec: data.duration_sec || Eng.dur || 0, local: true };
+}
+
+/* Render the medley on the server for EXPORT: upload each baked sample (POST /api/sample),
+   bounce them in one mix (POST /api/render-medley), and return the render info (incl.
+   paths.mp3/wav for download), stamped with the swap `sig`. Used only when the user taps
+   "export jawn" — in-app preview/A-B now plays the client-side splice (previewMedley). */
 async function renderMedley(song, swaps, onStatus) {
   const entries = Object.entries(swaps);
   const placements = [];
@@ -506,12 +614,11 @@ async function renderMedley(song, swaps, onStatus) {
     const info = await r.json(); if (!r.ok || info.error) throw new Error(info.error || "sample upload failed");
     placements.push({ label, sample_id: info.id });
   }
-  onStatus && onStatus(`rendering ${entries.length} swap${entries.length > 1 ? "s" : ""} … (~10–40s)`);
+  onStatus && onStatus(`bouncing ${entries.length} swap${entries.length > 1 ? "s" : ""} for export … (~10–40s)`);
   const r2 = await fetch(api("/api/render-medley"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ song, placements, name: "medley", confine: true }) });
   const info = await r2.json(); if (!r2.ok || info.error) throw new Error(info.error || "render failed");
-  const edited = { ...(Eng.origBuffers || {}) };
-  for (const [stem, rel] of Object.entries(info.stems || {})) { try { edited[stem] = await fetchDecode(asset(rel)); } catch (e) {} }
-  Eng.editedBuffers = edited;
+  // Export wants the bounce file (info.paths); playback already runs on the client splice,
+  // so we don't re-download/decode the server stems here.
   info.sig = sigOf(swaps);
   return info;
 }
@@ -586,9 +693,15 @@ function App() {
     if (!res.ok) throw new Error("could not load analysis.json");
     const j = await res.json();
     engReset(); setBounce(null); setMixView("remix");
-    setSong(name); setData(j); setStep("studio");
+    setSong(name); setData(j);
+    // Decode the stems BEFORE dropping the user on the timeline, so the loading screen
+    // stays up until the audio is actually ready — no dead-air gap where the timeline
+    // shows but nothing plays. Then flag autoplay so the studio starts the song itself.
     const ok = await loadStems(j, name);
+    Eng.autoplay = ok > 0;
+    setStep("studio");
     flash(ok ? `loaded ${name} · ${ok}/4 stems` : "loaded (audio unavailable)", !ok);
+    return ok;
   };
 
   const resetAll = () => { engReset(); setSwaps({}); setBounce(null); setMixView("remix"); setData(null); setSong(null); setStep("upload"); };
@@ -610,9 +723,11 @@ function App() {
 function Upload({ setStep, setSong, loadSong, flash }) {
   const fileRef = useRef(null);
   const [songs, setSongs] = useState(null);        // null=closed, []=open list
+  const [loading, setLoading] = useState(false);   // decoding a sample's stems before studio
   const rec = useRecorder((f) => uploadSong(f));
 
   const uploadSong = async (file) => {
+    ensureCtx();                                   // unlock audio on this gesture so studio can autoplay later
     flash("uploading " + file.name + " …");
     try {
       const res = await fetch(api(`/api/upload?name=${encodeURIComponent(file.name)}&sensitivity=${SENSITIVITY}`), { method: "POST", body: file });
@@ -656,6 +771,21 @@ function Upload({ setStep, setSong, loadSong, flash }) {
       </div>
       <div style={{ marginTop: "auto", marginBottom: 6, opacity: .45 }}><Waveform seed="hero-wave" count={52} height={24} color="var(--ink-3)" /></div>
 
+      {loading && (
+        <div className="scrim" style={{ alignItems: "center", justifyContent: "center" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+            <div className="brandmark" style={{ width: 80 }}>
+              <i style={{ width: "100%", background: "var(--stem-vocals)" }} />
+              <i style={{ width: "64%", background: "var(--stem-drums)" }} />
+              <i style={{ width: "88%", background: "var(--stem-bass)" }} />
+              <i style={{ width: "46%", background: "var(--stem-other)" }} />
+            </div>
+            <div className="eyebrow">loading your jawn</div>
+            <div className="bigtitle" style={{ fontSize: 22 }}>decoding stems …</div>
+          </div>
+        </div>
+      )}
+
       {songs && (
         <div className="scrim" onClick={() => setSongs(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
@@ -664,7 +794,7 @@ function Upload({ setStep, setSong, loadSong, flash }) {
               <IconButton size="sm" onClick={() => setSongs(null)}>✕</IconButton></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {songs.map((s) => (
-                <div className="lrow" key={s} style={{ cursor: "pointer" }} onClick={() => { setSongs(null); loadSong(s).catch((e) => flash(e.message, true)); }}>
+                <div className="lrow" key={s} style={{ cursor: "pointer" }} onClick={() => { ensureCtx(); setSongs(null); setLoading(true); loadSong(s).catch((e) => { setLoading(false); flash(e.message, true); }); }}>
                   <span style={{ fontSize: 16 }}>🎵</span><span className="fn" style={{ flex: 1 }}>{s}</span><span style={{ color: "var(--ink-3)" }}>→</span>
                 </div>
               ))}
@@ -694,6 +824,7 @@ function Splitting({ song, setStep, loadSong, flash, reset }) {
       else if (s.state === "running") setStepText(s.step || "working …");
       else if (s.state === "done") {
         clearInterval(tick); clearInterval(creep); clearInterval(reveal); setPct(100);
+        setStepText("loading audio …");        // hold the loading screen up while the stems decode
         sessionStorage.removeItem("jx_job");
         try { await loadSong(s.song); } catch (e) { flash(e.message, true); }
       } else if (s.state === "error") {
@@ -746,8 +877,6 @@ function Studio({ data, song, swaps, setSwaps, setStep, flash, bounce, setBounce
   const [loopLabel, setLoopLabel] = useState(null);
   const [sheet, setSheet] = useState(null);        // label being swapped
   const [showList, setShowList] = useState(false);
-  const [rendering, setRendering] = useState(false);
-  const [renderMsg, setRenderMsg] = useState("");
   const scrollRef = useRef(null);
   const dur = data.duration_sec || 1;
   const trackW = Math.max(1, dur * PPS);
@@ -764,17 +893,32 @@ function Studio({ data, song, swaps, setSwaps, setStep, flash, bounce, setBounce
     if (Eng.playing) { const o = engTime(); engPause(); Eng.offset = o; engPlay(); }
   }, [rendered, mix]);
 
-  // Render the medley for the current swaps, then play the remix right here on the timeline.
-  const doRender = async () => {
-    if (!swapCount || rendering) return;
-    engPause(); setRendering(true); setRenderMsg("preparing …");
-    try {
-      const info = await renderMedley(song, swaps, setRenderMsg);
-      setBounce(info); setMix("remix"); setRenderMsg("");
-      flash(`remix ready · ${info.slots_replaced} slots — press play ▶`);
-    } catch (e) { setRenderMsg(""); flash("render failed: " + e.message, true); }
-    setRendering(false);
-  };
+  // A fresh load decodes the stems behind the loading screen, then drops us here with
+  // Eng.autoplay set — start the song immediately so it's already playing as the timeline
+  // appears. Best-effort: only once the audio context is running, so we never advance a
+  // silent playhead against a context the browser is still blocking.
+  useEffect(() => {
+    if (!Eng.autoplay) return;
+    Eng.autoplay = false;
+    const ctx = ensureCtx();
+    if (ctx.state === "running") engPlay();
+    else ctx.resume().then(() => { if (ctx.state === "running") engPlay(); }).catch(() => {});
+  }, []);
+
+  // Build the remix locally whenever the swaps change — no Modal. Effects are already
+  // baked client-side and placement is array math, so "your jawn" is instantly playable
+  // on the timeline. The server bounce is reserved for export (Finalize).
+  useEffect(() => {
+    let cancelled = false;
+    if (!swapCount) { Eng.editedBuffers = null; setBounce(null); return; }
+    (async () => {
+      try {
+        const info = await previewMedley(data, song, swaps);
+        if (!cancelled) setBounce(info);
+      } catch (e) { if (!cancelled) flash("preview failed: " + e.message, true); }
+    })();
+    return () => { cancelled = true; };
+  }, [curSig]);
   // keep the playhead in view while playing
   useEffect(() => {
     const sc = scrollRef.current; if (!sc || !playing) return;
@@ -825,16 +969,12 @@ function Studio({ data, song, swaps, setSwaps, setStep, flash, bounce, setBounce
       <div className="xport">
         {swapCount > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-            {rendered ? (
-              <div className="ab">
-                <button className={mix === "orig" ? "on" : ""} onClick={() => setMix("orig")}>original</button>
-                <button className={mix === "remix" ? "on" : ""} onClick={() => setMix("remix")}>your jawn</button>
-              </div>
-            ) : (
-              <Button size="sm" variant="primary" disabled={rendering} onClick={doRender}>{rendering ? "rendering…" : `⟳ render remix · ${swapCount}`}</Button>
-            )}
+            <div className="ab">
+              <button className={mix === "orig" ? "on" : ""} onClick={() => setMix("orig")}>original</button>
+              <button className={mix === "remix" ? "on" : ""} onClick={() => setMix("remix")} disabled={!rendered}>your jawn</button>
+            </div>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: (rendered && mix === "remix") ? "var(--brand)" : "var(--ink-3)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {rendering ? renderMsg : rendered ? (mix === "remix" ? "🎚 playing your jawn — hit play" : "playing original") : "render to play your swaps on the timeline"}
+              {rendered ? (mix === "remix" ? "🎚 playing your jawn — hit play ▶" : "playing original") : "building remix …"}
             </span>
           </div>
         )}
@@ -1194,6 +1334,7 @@ function Finalize({ data, song, swaps, setSwaps, setStep, flash, bounce, setBoun
   const [prog, setProg] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [status, setStatus] = useState("");
+  const [exporting, setExporting] = useState(false);
   const dur = data.duration_sec || 1;
   const entries = Object.entries(swaps);
   const sig = sigOf(swaps);
@@ -1201,8 +1342,9 @@ function Finalize({ data, song, swaps, setSwaps, setStep, flash, bounce, setBoun
 
   useEffect(() => { Eng.onTick = (t, d) => setProg(d ? t / d : 0); Eng.onState = setPlaying; return () => { Eng.onTick = null; Eng.onState = null; }; }, []);
 
-  // Make sure a render exists for the current swaps — reuse the studio's if it matches,
-  // otherwise render now (covers landing here without rendering on the timeline first).
+  // Make the remix playable for the current swaps — reuse the studio's local splice if it
+  // matches, otherwise build it now (instant, no Modal). The server bounce is reserved for
+  // the export tap below.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -1210,11 +1352,11 @@ function Finalize({ data, song, swaps, setSwaps, setStep, flash, bounce, setBoun
       if (!entries.length) { Eng.editedBuffers = null; Eng.buffers = { ...(Eng.origBuffers || {}) }; setBounce(null); setStatus("no swaps yet — go back and replace a part"); return; }
       if (ready) { Eng.buffers = ab === "remix" ? Eng.editedBuffers : { ...(Eng.origBuffers || {}) }; setStatus(`ready — ${bounce.slots_replaced} slots across the ${Math.round(bounce.duration_sec)}s song ▶`); return; }
       try {
-        const info = await renderMedley(song, swaps, setStatus);
+        const info = await previewMedley(data, song, swaps);
         if (cancelled) return;
         setBounce(info); Eng.buffers = ab === "remix" ? Eng.editedBuffers : { ...(Eng.origBuffers || {}) };
-        setStatus(`done — ${info.slots_replaced} slots across the ${Math.round(info.duration_sec)}s song ▶`);
-      } catch (e) { if (!cancelled) { setStatus("render failed: " + e.message); flash(e.message, true); } }
+        setStatus(`ready — ${info.slots_replaced} slots across the ${Math.round(info.duration_sec)}s song ▶`);
+      } catch (e) { if (!cancelled) { setStatus("preview failed: " + e.message); flash(e.message, true); } }
     })();
     return () => { cancelled = true; };
   }, [sig]);
@@ -1228,7 +1370,20 @@ function Finalize({ data, song, swaps, setSwaps, setStep, flash, bounce, setBoun
 
   const isRemix = ab === "remix";
   const revert = (label) => setSwaps((m) => { const n = { ...m }; delete n[label]; return n; });
-  const exportJawn = () => { if (!bounce) return; const rel = bounce.paths.mp3 || bounce.paths.wav; const a = document.createElement("a"); a.href = asset(rel); a.download = (data.song_id || song) + "-jawn." + (rel.split(".").pop()); a.click(); };
+  const download = (paths) => { const rel = paths.mp3 || paths.wav; const a = document.createElement("a"); a.href = asset(rel); a.download = (data.song_id || song) + "-jawn." + (rel.split(".").pop()); a.click(); };
+  // The one Modal round-trip in the flow: bounce the final mix on the server, then download.
+  // Reuses a prior server bounce if it already matches these exact swaps.
+  const exportJawn = async () => {
+    if (!entries.length || exporting) return;
+    if (bounce && bounce.paths && bounce.sig === sig) { download(bounce.paths); return; }
+    setExporting(true);
+    try {
+      const info = await renderMedley(song, swaps, setStatus);   // server bounce; leaves the local preview buffers intact
+      setBounce(info); setStatus(`exported — ${info.slots_replaced} slots`);
+      download(info.paths);
+    } catch (e) { setStatus("export failed: " + e.message); flash(e.message, true); }
+    setExporting(false);
+  };
 
   return (
     <div className="scr" style={{ padding: "16px 18px 0" }}>
@@ -1275,7 +1430,7 @@ function Finalize({ data, song, swaps, setSwaps, setStep, flash, bounce, setBoun
       <div className="xport" style={{ margin: "8px -18px 0" }}>
         <div style={{ display: "flex", gap: 10 }}>
           <Button block size="lg" variant="ghost" onClick={() => { engPause(); Eng.buffers = { ...(Eng.origBuffers || {}) }; setStep("studio"); }}>‹ keep editing</Button>
-          <Button block size="lg" disabled={!ready} onClick={exportJawn}>export jawn →</Button>
+          <Button block size="lg" disabled={!ready || exporting} onClick={exportJawn}>{exporting ? "bouncing…" : "export jawn →"}</Button>
         </div>
       </div>
     </div>
