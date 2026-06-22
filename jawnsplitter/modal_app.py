@@ -71,7 +71,7 @@ image = (
         f"{APP_DIR}/uploads": uploads_vol,
     },
     max_containers=1,        # single container so JOBS dict + status polling stay coherent
-    scaledown_window=300,    # sleep the GPU after 5 min idle (Volume keeps songs alive)
+    scaledown_window=60,     # sleep the GPU 1 min after idle (Volume keeps songs alive)
     timeout=60 * 30,
 )
 @modal.concurrent(max_inputs=100)  # one warm container serves many simultaneous requests

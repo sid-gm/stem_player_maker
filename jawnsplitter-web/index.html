@@ -245,7 +245,7 @@ const sigOf = (swaps) => Object.entries(swaps).map(([l, v]) => l + ":" + v.name 
    playhead, plus a looping reference-clip preview. React mirrors prog/playing
    through onTick/onState callbacks. */
 const Eng = {
-  ctx: null, master: null, buffers: {}, origBuffers: null, editedBuffers: null,
+  ctx: null, master: null, buffers: {}, origBuffers: null, editedBuffers: null, analysis: null,
   gains: {}, sources: null, refSrc: null, refGen: 0, muted: {},
   playing: false, silent: false, ctxStart: 0, offset: 0, raf: null, dur: 0,
   onTick: null, onState: null,
@@ -312,7 +312,7 @@ function engStopReference() {
 }
 function engReset() {
   engStop(); engStopReference();
-  Eng.buffers = {}; Eng.origBuffers = null; Eng.editedBuffers = null; Eng.muted = {}; Eng.dur = 0;
+  Eng.buffers = {}; Eng.origBuffers = null; Eng.editedBuffers = null; Eng.muted = {}; Eng.dur = 0; Eng.analysis = null;
 }
 
 async function fetchDecode(url) {
@@ -326,7 +326,7 @@ async function loadStems(data, song) {
   // runs (loadSong flips to "studio" before awaiting us) and its mount effect reassigns
   // Eng.buffers mid-load. Mutating Eng.buffers across awaits would let that reassignment
   // orphan whatever already decoded (the first stem, vocals). Assign atomically at the end.
-  const buffers = {}; Eng.dur = data.duration_sec || 0;
+  const buffers = {}; Eng.dur = data.duration_sec || 0; Eng.analysis = data;  // kept for client-side part previews
   let ok = 0;
   for (const s of (data.stems || [])) {
     // analysis.json stem paths vary (relative "stems/x.wav", "output/<song>/stems/x.wav",
@@ -343,20 +343,43 @@ async function loadStems(data, song) {
   Eng.origBuffers = { ...buffers };
   return ok;
 }
-/* loop a part's representative-bar preview clip, soloed to its stem */
+/* slice a short buffer [startSec, endSec) out of an already-decoded stem buffer */
+function sliceBuffer(srcBuf, startSec, endSec) {
+  const ctx = ensureCtx();
+  const sr = srcBuf.sampleRate;
+  const s0 = Math.max(0, Math.floor(startSec * sr));
+  const s1 = Math.min(srcBuf.length, Math.floor(endSec * sr));
+  const len = Math.max(1, s1 - s0);
+  const out = ctx.createBuffer(srcBuf.numberOfChannels, len, sr);
+  for (let ch = 0; ch < srcBuf.numberOfChannels; ch++) {
+    out.copyToChannel(srcBuf.getChannelData(ch).subarray(s0, s1), ch, 0);
+  }
+  return out;
+}
+
+/* Loop a part's preview, soloed to its stem — sliced CLIENT-SIDE from the stem
+   buffer we already loaded (no /api/reference round-trip). The browser already has
+   the decoded stems + each occurrence's start/end, so this is instant and free.
+   (song is unused now; kept for signature compatibility with the caller.) */
 async function playReference(song, label) {
   engPause(); engStopReference();
-  const gen = Eng.refGen;                        // this load is only valid until the next engStopReference()
-  const r = await fetch(api(`/api/reference?song=${encodeURIComponent(song)}&label=${encodeURIComponent(label)}`), { cache: "no-store" });
-  const info = await r.json();
-  if (!r.ok || info.error) throw new Error(info.error || "reference failed");
-  const buf = await fetchDecode(asset(info.path));
-  if (gen !== Eng.refGen) return info;           // superseded while loading (sheet closed / ab flipped) — don't start an orphan
+  const gen = Eng.refGen;                        // valid only until the next engStopReference()
+  const data = Eng.analysis;
+  const stem = data && stemOf(data, label);
+  const part = data && partOf(data, label);
+  const stemBuf = stem && Eng.buffers[stem];
+  const occs = (part && part.occurrences) || [];
+  if (!stemBuf || !occs.length) throw new Error("reference unavailable");
+  // representative clip = the longest occurrence (the most complete instance of the part)
+  let occ = occs[0];
+  for (const o of occs) if ((o.end_sec - o.start_sec) > (occ.end_sec - occ.start_sec)) occ = o;
+  const buf = sliceBuffer(stemBuf, occ.start_sec, occ.end_sec);
+  if (gen !== Eng.refGen) return;                // superseded (sheet closed / ab flipped)
   const ctx = ensureCtx();
   const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
   src.connect(Eng.master); src.start();
   Eng.refSrc = src;
-  return info;
+  return { stem, label, start_sec: occ.start_sec, end_sec: occ.end_sec, duration_sec: occ.end_sec - occ.start_sec };
 }
 
 /* ---- sample decode / effects / WAV encode (ported from visualizer.html) ---- */
