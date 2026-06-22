@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import threading
 import traceback
 import urllib.parse
@@ -51,6 +52,23 @@ ALLOW_ORIGIN = os.environ.get("ALLOW_ORIGIN", "*")
 JOBS: dict[str, dict] = {}
 
 
+def _encode_mp3(wav_path):
+    """Write a sibling .mp3 next to a stem WAV for light client delivery (~7x smaller).
+    Stems are served to the browser for *playback* only — the export bounce is computed
+    server-side from the WAVs, so quality is unaffected. Returns the mp3 Path, or None on
+    failure so callers fall back to the WAV."""
+    wav_path = Path(wav_path)
+    mp3_path = wav_path.with_suffix(".mp3")
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav_path),
+             "-codec:a", "libmp3lame", "-b:a", "192k", str(mp3_path)],
+            check=True)
+        return mp3_path
+    except Exception:  # noqa: BLE001 - mp3 is optional; fall back to the wav
+        return None
+
+
 def _rel_to_root(p) -> str:
     """ROOT-relative artifact path, robust to Modal Volume mounts.
 
@@ -79,6 +97,8 @@ def _process(job_id: str, audio_path: str, sensitivity: str) -> None:
         th = SENSITIVITY.get(sensitivity, SENSITIVITY["medium"])
         job.update(state="running", step="separating stems")
         sep = separate(audio_path, OUT, device=DEVICE)  # cuda on Modal, mps locally; auto CPU fallback inside
+        for _p in sep["stems"].values():        # light mp3 copies served to the browser for playback
+            _encode_mp3(_p)
 
         job["step"] = "analyzing + detecting patterns"
         result = analyze(
@@ -250,8 +270,9 @@ class Handler(SimpleHTTPRequestHandler):
             k: (_rel_to_root(v) if k in ("wav", "mp3") else v)
             for k, v in info["paths"].items()
         }
-        if info.get("stems"):  # edited per-stem wavs for the timeline -> also ROOT-relative
-            info["stems"] = {s: _rel_to_root(p) for s, p in info["stems"].items()}
+        if info.get("stems"):  # edited per-stem wavs for the timeline -> deliver light mp3s
+            info["stems"] = {s: _rel_to_root(_encode_mp3(p) or p)
+                             for s, p in info["stems"].items()}
         return info
 
     def _render(self, u):

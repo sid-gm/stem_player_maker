@@ -80,3 +80,29 @@ def serve():
     # Launch the stdlib server; cwd=APP_DIR so sibling imports (analyze, render, ...)
     # resolve and static files are served from the app dir. server.py listens on PORT.
     subprocess.Popen(["python", "server.py"], cwd=APP_DIR)
+
+
+@app.function(
+    image=image,
+    volumes={f"{APP_DIR}/output": output_vol},
+    timeout=60 * 15,
+)
+def backfill_mp3():
+    """One-off: encode missing stems/*.mp3 for already-split songs (CPU only).
+    Run with:  modal run modal_app.py::backfill_mp3"""
+    import pathlib
+
+    out = pathlib.Path(f"{APP_DIR}/output")
+    n = 0
+    for wav in sorted(out.glob("*/stems/*.wav")):
+        mp3 = wav.with_suffix(".mp3")
+        if mp3.exists():
+            continue
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav),
+             "-codec:a", "libmp3lame", "-b:a", "192k", str(mp3)],
+            check=True)
+        n += 1
+        print(f"  encoded {mp3}")
+    output_vol.commit()
+    print(f"backfilled {n} stem mp3s")

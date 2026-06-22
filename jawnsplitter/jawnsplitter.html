@@ -330,11 +330,15 @@ async function loadStems(data, song) {
   let ok = 0;
   for (const s of (data.stems || [])) {
     // analysis.json stem paths vary (relative "stems/x.wav", "output/<song>/stems/x.wav",
-    // or an absolute fs path). The on-disk layout is always output/<song>/stems/<type>.wav,
-    // so rebuild from the song folder first, then fall back to the stored path.
+    // or an absolute fs path). The on-disk layout is always output/<song>/stems/<type>.{mp3,wav},
+    // so rebuild from the song folder first, then fall back to the stored path. Prefer the
+    // light mp3 (≈7x smaller) for delivery; fall back to the wav if it isn't there yet.
     const tries = [];
-    if (song) tries.push(`output/${song}/stems/${s.type}.wav`);
-    if (s.path) { const i = s.path.indexOf("output/"); tries.push(i >= 0 ? s.path.slice(i) : s.path); }
+    if (song) { tries.push(`output/${song}/stems/${s.type}.mp3`); tries.push(`output/${song}/stems/${s.type}.wav`); }
+    if (s.path) {
+      const i = s.path.indexOf("output/"); const base = i >= 0 ? s.path.slice(i) : s.path;
+      tries.push(base.replace(/\.wav$/i, ".mp3")); tries.push(base);
+    }
     for (const rel of tries) {
       try { buffers[s.type] = await fetchDecode(asset(rel)); ok++; break; } catch (e) { /* try next */ }
     }
