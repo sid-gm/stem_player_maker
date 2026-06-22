@@ -19,6 +19,7 @@ Endpoints (all JSON unless noted):
 from __future__ import annotations
 
 import json
+import os
 import threading
 import traceback
 import urllib.parse
@@ -36,10 +37,40 @@ from slice_reference import slice_reference
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "output"
 UPLOADS = ROOT / "uploads"
+OUT.mkdir(exist_ok=True)        # may be a fresh Modal Volume mount on first boot
 UPLOADS.mkdir(exist_ok=True)
 PORT = 8753
 
+# Stem-separation device: "mps" on Apple Silicon (local), "cuda" on Modal GPU.
+# separate() auto-falls back to CPU if the chosen device fails.
+DEVICE = os.environ.get("SEP_DEVICE", "mps")
+# CORS origin for the Vercel frontend → Modal backend. "*" for now; lock to the
+# Vercel domain in prod via the ALLOW_ORIGIN env var.
+ALLOW_ORIGIN = os.environ.get("ALLOW_ORIGIN", "*")
+
 JOBS: dict[str, dict] = {}
+
+
+def _rel_to_root(p) -> str:
+    """ROOT-relative artifact path, robust to Modal Volume mounts.
+
+    output/ and uploads/ are Modal Volumes: they mount at /app/output (etc.) but
+    resolve() follows the symlink out to /__modal/volumes/<id>/..., which is not
+    under ROOT. So try a lexical relative_to(ROOT) first (handles /app/output/...
+    paths without touching the fs), then fall back to mapping the resolved path
+    back through the OUT/UPLOADS mounts."""
+    p = Path(p)
+    try:
+        return str(p.relative_to(ROOT))
+    except ValueError:
+        pass
+    rp = p.resolve()
+    for base, name in ((OUT, "output"), (UPLOADS, "uploads")):
+        try:
+            return str(Path(name) / rp.relative_to(base.resolve()))
+        except ValueError:
+            continue
+    return str(rp.relative_to(ROOT.resolve()))  # last resort
 
 
 def _process(job_id: str, audio_path: str, sensitivity: str) -> None:
@@ -47,7 +78,7 @@ def _process(job_id: str, audio_path: str, sensitivity: str) -> None:
     try:
         th = SENSITIVITY.get(sensitivity, SENSITIVITY["medium"])
         job.update(state="running", step="separating stems")
-        sep = separate(audio_path, OUT, device="mps")  # auto CPU fallback inside
+        sep = separate(audio_path, OUT, device=DEVICE)  # cuda on Modal, mps locally; auto CPU fallback inside
 
         job["step"] = "analyzing + detecting patterns"
         result = analyze(
@@ -70,6 +101,18 @@ class Handler(SimpleHTTPRequestHandler):
 
     def log_message(self, *a):  # quieter console
         pass
+
+    def end_headers(self):
+        # Inject CORS on EVERY response — JSON API, static stems/json, and renders
+        # are all fetched cross-origin by the Vercel frontend (incl. decodeAudioData).
+        self.send_header("Access-Control-Allow-Origin", ALLOW_ORIGIN)
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        super().end_headers()
+
+    def do_OPTIONS(self):  # CORS preflight
+        self.send_response(204)
+        self.end_headers()
 
     def _send_json(self, obj, code=200):
         body = json.dumps(obj).encode()
@@ -108,7 +151,7 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             info = slice_reference(song_dir, label)
             # hand back a ROOT-relative path the static server can serve
-            info["path"] = str(Path(info["path"]).resolve().relative_to(ROOT))
+            info["path"] = _rel_to_root(info["path"])
             self._send_json(info)
         except SystemExit as exc:  # slice_reference raises these for bad input
             self._send_json({"error": str(exc)}, 404)
@@ -130,8 +173,7 @@ class Handler(SimpleHTTPRequestHandler):
                                 source_bar=int(src) if src else None,
                                 target_bar=int(tgt) if tgt else None)
             # hand back ROOT-relative paths the static server can serve
-            info["paths"] = {k: str(Path(p).resolve().relative_to(ROOT))
-                             for k, p in info["paths"].items()}
+            info["paths"] = {k: _rel_to_root(p) for k, p in info["paths"].items()}
             self._send_json(info)
         except SystemExit as exc:  # bad label / missing stem
             self._send_json({"error": str(exc)}, 404)
@@ -205,12 +247,11 @@ class Handler(SimpleHTTPRequestHandler):
     def _rel_paths(self, info: dict) -> dict:
         """Rewrite wav/mp3 output paths to ROOT-relative so the static server serves them."""
         info["paths"] = {
-            k: (str(Path(v).resolve().relative_to(ROOT)) if k in ("wav", "mp3") else v)
+            k: (_rel_to_root(v) if k in ("wav", "mp3") else v)
             for k, v in info["paths"].items()
         }
         if info.get("stems"):  # edited per-stem wavs for the timeline -> also ROOT-relative
-            info["stems"] = {s: str(Path(p).resolve().relative_to(ROOT))
-                             for s, p in info["stems"].items()}
+            info["stems"] = {s: _rel_to_root(p) for s, p in info["stems"].items()}
         return info
 
     def _render(self, u):

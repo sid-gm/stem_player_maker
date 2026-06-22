@@ -216,11 +216,12 @@ body{
 const { useState, useEffect, useRef } = React;
 
 /* ----------------------------------------------------------- config
-   API base: same-origin by default (works under server.py at :8753).
-   Override with ?api=https://your-backend  or  localStorage.jx_api_base
-   so the static page can live on Vercel and talk to a hosted backend. */
+   API base: defaults to the hosted Modal backend so the static page works on
+   Vercel with no config. Override with ?api=https://your-backend or
+   localStorage.jx_api_base (e.g. ?api=http://localhost:8753 for local dev). */
+const DEFAULT_API_BASE = "https://sid-gm--jawnsplitter-serve.modal.run";
 const API_BASE = ((new URLSearchParams(location.search).get("api"))
-  || localStorage.getItem("jx_api_base") || "").replace(/\/+$/, "");
+  || localStorage.getItem("jx_api_base") || DEFAULT_API_BASE).replace(/\/+$/, "");
 const api = (p) => API_BASE + p;
 const asset = (rel) => api("/" + encodeURI(rel).replace(/^\/+/, "")) + (rel.includes("?") ? "" : "?t=" + Date.now());
 console.log("[jawnsplitter] API_BASE =", API_BASE || "(same-origin)");
