@@ -45,6 +45,9 @@ PORT = 8753
 # Stem-separation device: "mps" on Apple Silicon (local), "cuda" on Modal GPU.
 # separate() auto-falls back to CPU if the chosen device fails.
 DEVICE = os.environ.get("SEP_DEVICE", "mps")
+# Where demucs runs: "local" (this process) or "modal" (offload to the separate_gpu
+# function so this container stays CPU-only). Set to "modal" by the Modal serve env.
+SEPARATE_BACKEND = os.environ.get("SEPARATE_BACKEND", "local")
 # CORS origin for the Vercel frontend → Modal backend. "*" for now; lock to the
 # Vercel domain in prod via the ALLOW_ORIGIN env var.
 ALLOW_ORIGIN = os.environ.get("ALLOW_ORIGIN", "*")
@@ -91,14 +94,40 @@ def _rel_to_root(p) -> str:
     return str(rp.relative_to(ROOT.resolve()))  # last resort
 
 
+def _separate_remote(audio_path: str) -> dict:
+    """Offload demucs to the GPU `separate_gpu` Modal function, then write the returned
+    stem bytes to OUT ourselves — so this (CPU) container's own Volume mount is immediately
+    consistent for analysis (no cross-container Volume read). Mirrors separate.separate()'s
+    return shape so the rest of _process is unchanged."""
+    import modal
+
+    audio_path = Path(audio_path)
+    fn = modal.Function.from_name("jawnsplitter", "separate_gpu")
+    res = fn.remote(audio_path.read_bytes(), audio_path.name)
+    song = res["song"]
+    stems_dir = OUT / song / "stems"
+    stems_dir.mkdir(parents=True, exist_ok=True)
+    stems = {}
+    for nm, b in res["stems"].items():
+        wav = stems_dir / f"{nm}.wav"
+        wav.write_bytes(b)
+        _encode_mp3(wav)                        # light mp3 copy for browser delivery
+        stems[nm] = str(wav)
+    return {"song": song, "song_dir": str(OUT / song),
+            "stems": stems, "duration_sec": res["duration_sec"]}
+
+
 def _process(job_id: str, audio_path: str, sensitivity: str) -> None:
     job = JOBS[job_id]
     try:
         th = SENSITIVITY.get(sensitivity, SENSITIVITY["medium"])
         job.update(state="running", step="separating stems")
-        sep = separate(audio_path, OUT, device=DEVICE)  # cuda on Modal, mps locally; auto CPU fallback inside
-        for _p in sep["stems"].values():        # light mp3 copies served to the browser for playback
-            _encode_mp3(_p)
+        if SEPARATE_BACKEND == "modal":
+            sep = _separate_remote(audio_path)  # demucs on the GPU function; stems written here
+        else:
+            sep = separate(audio_path, OUT, device=DEVICE)  # local demucs (mps/cpu)
+            for _p in sep["stems"].values():    # light mp3 copies served to the browser for playback
+                _encode_mp3(_p)
 
         job["step"] = "analyzing + detecting patterns"
         result = analyze(

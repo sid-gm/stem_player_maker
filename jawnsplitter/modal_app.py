@@ -19,6 +19,7 @@ Commands:
   modal app logs jawnsplitter   # tail logs
 """
 
+import os
 import subprocess
 
 import modal
@@ -65,21 +66,43 @@ image = (
 
 @app.function(
     image=image,
-    gpu="L4",
-    volumes={
+    volumes={                       # CPU container — no GPU. Demucs is offloaded to separate_gpu.
         f"{APP_DIR}/output": output_vol,
         f"{APP_DIR}/uploads": uploads_vol,
     },
     max_containers=1,        # single container so JOBS dict + status polling stay coherent
-    scaledown_window=60,     # sleep the GPU 1 min after idle (Volume keeps songs alive)
+    scaledown_window=300,    # CPU is cheap — keep it warm a bit for snappy serving
     timeout=60 * 30,
 )
 @modal.concurrent(max_inputs=100)  # one warm container serves many simultaneous requests
 @modal.web_server(PORT, startup_timeout=120)
 def serve():
-    # Launch the stdlib server; cwd=APP_DIR so sibling imports (analyze, render, ...)
-    # resolve and static files are served from the app dir. server.py listens on PORT.
-    subprocess.Popen(["python", "server.py"], cwd=APP_DIR)
+    # Launch the stdlib server; cwd=APP_DIR so sibling imports (analyze, render, ...) resolve
+    # and static files are served from the app dir. SEPARATE_BACKEND=modal tells server.py to
+    # offload demucs to the GPU separate_gpu function instead of running it on this CPU box.
+    subprocess.Popen(["python", "server.py"], cwd=APP_DIR,
+                     env={**os.environ, "SEPARATE_BACKEND": "modal"})
+
+
+@app.function(image=image, gpu="L4", scaledown_window=10, timeout=60 * 20)
+def separate_gpu(audio_bytes: bytes, name: str) -> dict:
+    """GPU-only demucs: raw audio bytes in, the 4 stem WAVs out as bytes. Deliberately
+    mounts NO Volumes — it's pure compute, so there's no cross-container Volume handoff to
+    get wrong. The CPU web container writes the returned stems to the output Volume itself.
+    Scales to zero ~10s after the split, so the L4 bills seconds per song, not session time."""
+    import pathlib
+    import sys
+    import tempfile
+
+    sys.path.insert(0, APP_DIR)              # so `from separate import separate` resolves
+    from separate import separate
+
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    src = tmp / (pathlib.Path(name).name or "upload.bin")
+    src.write_bytes(audio_bytes)
+    sep = separate(str(src), tmp / "out", device="cuda")  # auto CPU fallback inside
+    stems = {n: pathlib.Path(p).read_bytes() for n, p in sep["stems"].items()}
+    return {"song": sep["song"], "duration_sec": sep["duration_sec"], "stems": stems}
 
 
 @app.function(
