@@ -30,6 +30,7 @@ from pathlib import Path
 
 from analyze import SENSITIVITY, analyze
 from enrich_analysis import enrich
+from match import recommend as match_recommend
 from preview_snap import snap_preview
 from render import render, render_medley
 from separate import separate
@@ -240,6 +241,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._render(u)
         if u.path == "/api/sample":
             return self._sample(u)
+        if u.path == "/api/match":
+            return self._match(u)
         if u.path == "/api/render-medley":
             return self._render_medley()
         self._send_json({"error": "not found"}, 404)
@@ -341,6 +344,42 @@ class Handler(SimpleHTTPRequestHandler):
             return self._send_json({"error": f"could not decode sample: {exc}"}, 400)
         # id = the wav filename; resolved back under UPLOADS on render (never a path).
         self._send_json({"id": wav.name, "name": name})
+
+    def _match(self, u):
+        """Rank a dropped sound against a song's parts (best->worst, with sub-region).
+
+        POST /api/match?song=<song>            (raw audio body)  — a fresh sound
+        POST /api/match?song=<song>&sample_id= (no body)         — reuse a stashed sample
+        Returns {sound_len_sec, recommendations:[{label, stem, name, count,
+        slot_sec, tier, score, best_offset:{start_sec, end_sec}}]}."""
+        q = urllib.parse.parse_qs(u.query)
+        song = urllib.parse.unquote(q.get("song", [""])[0])
+        name = urllib.parse.unquote(q.get("name", ["sound.wav"])[0])
+        sample_id = q.get("sample_id", [""])[0]
+        song_dir = OUT / song
+        if not song or not (song_dir / "analysis.json").exists():
+            return self._send_json({"error": "no such song"}, 404)
+
+        sound_path = None
+        if sample_id:
+            cand = UPLOADS / Path(sample_id).name      # name only — no path traversal
+            if not cand.exists():
+                return self._send_json({"error": f"unknown sample_id: {sample_id}"}, 400)
+            sound_path = cand
+        elif int(self.headers.get("Content-Length", 0)) > 0:
+            try:
+                sound_path = self._decode_sample(name)
+            except Exception as exc:  # noqa: BLE001
+                return self._send_json({"error": f"could not decode sound: {exc}"}, 400)
+        else:
+            return self._send_json({"error": "no sound (raw body or sample_id)"}, 400)
+
+        try:
+            self._send_json(match_recommend(song_dir, str(sound_path)))
+        except SystemExit as exc:  # bad/empty analysis
+            self._send_json({"error": str(exc)}, 400)
+        except Exception as exc:  # noqa: BLE001
+            self._send_json({"error": str(exc), "trace": traceback.format_exc()}, 500)
 
     def _render_medley(self):
         """Layer many parts -> many sounds into one bounce.

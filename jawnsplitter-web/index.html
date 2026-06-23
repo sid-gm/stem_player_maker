@@ -33,7 +33,7 @@
   --ink-0:#fff; --ink-1:#ededf2; --ink-2:#a4a4b6; --ink-3:#6c6c80;
   /* lines */
   --line:rgba(255,255,255,.10); --line-strong:rgba(255,255,255,.18);
-  --danger:#ff4d52;
+  --danger:#ff4d52; --success:#36d98a;
   /* semantic aliases */
   --surface:var(--stage-2); --surface-raised:var(--stage-3);
   /* type */
@@ -163,6 +163,48 @@ body{
   font-weight:600;font-size:14px;cursor:pointer;display:flex;flex-direction:column;gap:9px;align-items:center;}
 .drop .row{display:flex;gap:10px;}
 .drop .mini{font-family:var(--font-mono);font-size:11px;color:var(--ink-3);}
+/* ---------- choose-your-sound chooser (kit / upload / record) ---------- */
+.chooser{border:2px dashed var(--line-strong);border-radius:14px;padding:16px 14px;display:flex;flex-direction:column;gap:12px;align-items:center;}
+.chooser .tt{font-weight:700;font-size:15px;color:var(--ink-0);}
+.chooser .row{display:flex;gap:9px;width:100%;}
+.chooser .pick{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:13px 6px;border-radius:13px;
+  background:var(--stage-3);box-shadow:inset 0 0 0 1px var(--line-strong);border:none;cursor:pointer;color:var(--ink-1);
+  transition:transform var(--dur-fast) var(--ease-pop),box-shadow var(--dur-base),background var(--dur-base);}
+.chooser .pick:active{transform:scale(.95);}
+.chooser .pick.lead{background:var(--brand-soft);box-shadow:inset 0 0 0 1.5px var(--brand);}
+.chooser .pick .ic{font-size:20px;line-height:1;}
+.chooser .pick .nm{font-family:var(--font-mono);font-size:12px;font-weight:700;}
+.chooser .mini{font-family:var(--font-mono);font-size:11px;color:var(--ink-3);text-align:center;}
+/* ---------- kit browser (folder chips → sound list, docked while auditioning) ---------- */
+.kb{background:var(--surface);border-radius:14px;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden;}
+.kb .kbtop{display:flex;align-items:center;gap:8px;padding:11px 13px 9px;}
+.kb .kbtop .t{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);}
+.kb .src{margin-left:auto;display:flex;gap:6px;}
+.kb .srcb{font-family:var(--font-mono);font-size:11px;border:none;border-radius:999px;padding:5px 10px;cursor:pointer;
+  background:var(--stage-3);box-shadow:inset 0 0 0 1px var(--line);color:var(--ink-2);display:inline-flex;gap:5px;align-items:center;}
+.kb .srcb.on{background:var(--brand);color:#fff;box-shadow:none;font-weight:700;}
+.kb .folders{display:flex;gap:7px;overflow-x:auto;padding:0 13px 11px;scroll-snap-type:x proximity;}
+.kb .folders::-webkit-scrollbar{height:0;}
+.kb .fchip{flex:none;scroll-snap-align:start;font-family:var(--font-mono);font-size:12px;border:none;cursor:pointer;
+  border-radius:11px;padding:8px 11px;background:var(--stage-3);box-shadow:inset 0 0 0 1px var(--line);color:var(--ink-2);
+  display:flex;flex-direction:column;gap:3px;min-width:62px;text-align:left;transition:transform var(--dur-fast) var(--ease-pop);}
+.kb .fchip:active{transform:scale(.95);}
+.kb .fchip .fn{font-weight:700;letter-spacing:.02em;text-transform:lowercase;white-space:nowrap;}
+.kb .fchip .fc{font-size:9px;color:var(--ink-3);letter-spacing:.04em;}
+.kb .fchip.on{background:var(--stem-drums);color:var(--on-stem);box-shadow:none;}
+.kb .fchip.on .fc{color:rgba(11,11,15,.6);}
+.kb .slist{max-height:188px;overflow-y:auto;display:flex;flex-direction:column;border-top:1px solid var(--line);}
+.kb .srow{display:flex;align-items:center;gap:10px;padding:9px 13px;border:none;background:transparent;cursor:pointer;
+  text-align:left;box-shadow:inset 0 -1px 0 var(--line);transition:background var(--dur-fast);}
+.kb .srow:active{background:var(--stage-2);}
+.kb .srow.on{background:var(--brand-soft);box-shadow:inset 0 0 0 1px var(--brand);}
+.kb .srow .pl{width:30px;height:30px;border-radius:999px;flex:none;display:grid;place-items:center;font-size:12px;
+  background:var(--stage-3);box-shadow:inset 0 0 0 1px var(--line-strong);color:var(--ink-1);}
+.kb .srow.on .pl{background:var(--brand);color:#fff;box-shadow:var(--glow-brand);}
+.kb .srow .fn{font-family:var(--font-mono);font-size:12px;color:var(--ink-1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.kb .srow .ln{font-family:var(--font-mono);font-size:10px;color:var(--ink-3);flex:none;}
+.kb .srow .wv{width:74px;flex:none;}
+.kb .kbmsg{padding:16px 13px;font-family:var(--font-mono);font-size:11px;color:var(--ink-3);text-align:center;}
 .fxwrap{display:flex;flex-wrap:wrap;gap:6px;}
 .fxb{font-family:var(--font-mono);font-size:12px;padding:7px 9px;border-radius:999px;background:var(--stage-3);
   box-shadow:inset 0 0 0 1px var(--line);color:var(--ink-1);cursor:pointer;display:inline-flex;gap:5px;align-items:center;border:none;
@@ -202,6 +244,45 @@ body{
   background:var(--stage-3);box-shadow:0 8px 24px rgba(0,0,0,.5),inset 0 0 0 1px var(--line);color:var(--ink-1);
   font-family:var(--font-mono);font-size:12px;padding:9px 14px;border-radius:999px;max-width:88%;text-align:center;}
 .toast.err{box-shadow:0 8px 24px rgba(0,0,0,.5),inset 0 0 0 1px var(--danger);color:#ffd9da;}
+
+/* ---------- matchmaker (sound-first: drop a sound → ranked parts best→worst) ---------- */
+.mm-launch{flex:none;font-family:var(--font-ui);font-weight:700;font-size:13px;background:var(--brand);color:#fff;border:none;
+  border-radius:999px;padding:9px 14px;cursor:pointer;box-shadow:var(--glow-brand);display:inline-flex;gap:7px;align-items:center;
+  transition:transform var(--dur-fast) var(--ease-pop);}
+.mm-launch:active{transform:scale(.95);}
+.mm-an{display:flex;flex-direction:column;gap:14px;padding:2px 0;}
+.mm-an .ttl{font-family:var(--font-display);font-weight:800;font-size:21px;letter-spacing:-.02em;color:var(--ink-0);}
+.mm-snd{display:flex;align-items:center;gap:11px;background:var(--surface);border-radius:14px;padding:11px 13px;box-shadow:inset 0 0 0 1px var(--line);}
+.mm-snd .nm{font-family:var(--font-mono);font-size:12px;color:var(--ink-1);display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mm-snd .mt{font-family:var(--font-mono);font-size:10px;color:var(--ink-3);margin-top:3px;}
+.mm-scan{position:relative;background:var(--stage-0);border-radius:14px;padding:12px;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden;}
+.mm-feat{display:flex;flex-direction:column;gap:8px;}
+.mm-feat .frow{display:flex;align-items:center;gap:9px;}
+.mm-feat .fl{font-family:var(--font-mono);font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);width:96px;flex:none;text-align:right;}
+.mm-feat .cells{flex:1 1 0;display:flex;gap:3px;}
+.mm-feat .cells span{flex:1 1 0;height:9px;border-radius:3px;background:var(--stage-3);transition:background .18s var(--ease-out),box-shadow .18s;}
+.mm-scanhead{position:absolute;top:8px;bottom:8px;width:2px;background:var(--brand);box-shadow:0 0 14px var(--brand);border-radius:2px;z-index:5;}
+.mm-wave{position:relative;display:flex;align-items:center;gap:2px;width:100%;}
+.mm-wave .b{flex:1 1 0;min-width:1px;border-radius:999px;display:block;}
+.mm-head{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink-0);box-shadow:0 0 8px rgba(255,255,255,.85);border-radius:2px;pointer-events:none;z-index:5;}
+.mm-trimwin{position:absolute;top:-3px;bottom:-3px;border-radius:7px;box-shadow:inset 0 0 0 1.5px var(--brand);pointer-events:none;}
+.mm-ctxedge{position:absolute;top:0;bottom:0;width:1px;background:var(--line-strong);pointer-events:none;}
+.mm-pd{flex:none;width:34px;height:34px;border-radius:999px;border:none;cursor:pointer;display:grid;place-items:center;font-size:12px;
+  background:var(--stage-3);box-shadow:inset 0 0 0 1px var(--line-strong);color:var(--ink-1);transition:transform var(--dur-fast) var(--ease-pop);}
+.mm-pd:active{transform:scale(.9);}
+.mm-pd.on{color:#fff;}
+.mm-match{font-family:var(--font-ui);font-weight:700;border:none;cursor:pointer;border-radius:999px;display:inline-flex;align-items:center;
+  justify-content:center;gap:7px;white-space:nowrap;transition:transform var(--dur-fast) var(--ease-pop);}
+.mm-match:active{transform:scale(.97);}
+.mm-match.idle{background:var(--brand);color:#fff;}
+.mm-match.done{background:var(--success);color:var(--on-stem);}
+.mm-match:disabled{opacity:.4;cursor:not-allowed;}
+.mm-div{display:flex;align-items:center;gap:10px;margin:7px 0 1px;}
+.mm-div .ln{flex:1 1 0;height:1px;background:var(--line);}
+.mm-div .tx{font-family:var(--font-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;}
+.mm-replay{flex:none;font-family:var(--font-mono);font-size:10px;letter-spacing:.04em;color:var(--ink-3);background:none;border:none;
+  cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:3px;}
+.mm-replay:active{color:var(--brand);}
 </style>
 
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -228,7 +309,23 @@ const API_BASE = ((new URLSearchParams(location.search).get("api"))
   || localStorage.getItem("jx_api_base") || DEFAULT_API_BASE).replace(/\/+$/, "");
 const api = (p) => API_BASE + p;
 const asset = (rel) => api("/" + encodeURI(rel).replace(/^\/+/, "")) + (rel.includes("?") ? "" : "?t=" + Date.now());
-console.log("[jawnsplitter] API_BASE =", API_BASE || "(same-origin)");
+/* Bundled samples ship INSIDE the static deploy (samples/<dir>/…), so they load
+   same-origin from the CDN — never the backend. No cache-bust: they're immutable, so
+   the browser/CDN caches them and repeat "try a sample" loads are instant. */
+const localAsset = (rel) => "./" + encodeURI(rel).replace(/^\/+/, "");
+
+/* Kit base: the pre-loaded sound pack (OTTBOYZ 420 KIT, transcoded to mp3) lives on
+   Cloudflare R2 + CDN — NOT in this deploy and NOT on the Modal backend, so browsing it
+   can't blow Vercel bandwidth or stall the single API container. Sounds are fetched one
+   at a time, on tap (see KitBrowser); only index.json loads up front. Override with
+   ?kit=https://your-host or localStorage.jx_kit_base (e.g. ?kit=http://localhost:8000). */
+const DEFAULT_KIT_BASE = "https://pub-f9b240b0889747849bf6298642f7b103.r2.dev";   // OTTBOYZ kit on Cloudflare R2
+const KIT_BASE = ((new URLSearchParams(location.search).get("kit"))
+  || localStorage.getItem("jx_kit_base") || DEFAULT_KIT_BASE).replace(/\/+$/, "");
+/* encode each path segment (filenames contain spaces, "&", "+") but keep the "/" */
+const kitUrl = (rel) => KIT_BASE + "/" + String(rel).replace(/^\/+/, "").split("/").map(encodeURIComponent).join("/");
+
+console.log("[jawnsplitter] API_BASE =", API_BASE || "(same-origin)", "· KIT_BASE =", KIT_BASE);
 
 const STEMS = ["vocals", "drums", "bass", "other"];
 const SENSITIVITY = "medium";
@@ -319,23 +416,44 @@ function engReset() {
   Eng.buffers = {}; Eng.origBuffers = null; Eng.editedBuffers = null; Eng.muted = {}; Eng.dur = 0; Eng.analysis = null;
 }
 
-async function fetchDecode(url) {
+async function fetchDecode(url, cache = "no-store") {
   const ctx = ensureCtx();
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetch(url, { cache });
   if (!res.ok) throw new Error("HTTP " + res.status);
   return await ctx.decodeAudioData(await res.arrayBuffer());
 }
-async function loadStems(data, song) {
+
+/* The kit manifest (folders → sounds, metadata only — no audio) is small and immutable;
+   fetch it once and cache the promise so re-opening the swap sheet never re-fetches. The
+   per-sound audio is fetched lazily on tap (KitBrowser → chooseKitSound), never in bulk. */
+let _kitManifest = null;
+function loadKitManifest() {
+  if (!_kitManifest) {
+    _kitManifest = fetch(kitUrl("index.json"), { cache: "default" })
+      .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .catch((e) => { _kitManifest = null; throw e; });   // let a later open retry
+  }
+  return _kitManifest;
+}
+async function loadStems(data, loc) {
+  // loc = { sampleDir } for a bundled static sample, or { song } for a backend song.
   // Decode into a LOCAL object and assign Eng.buffers atomically at the end. loadSong now
   // awaits this fully before flipping to the studio, so Studio mounts only after the
   // buffers are in place — but the atomic assign stays robust if a reload ever races a mount.
   const buffers = {}; Eng.dur = data.duration_sec || 0; Eng.analysis = data;  // kept for client-side part previews
   let ok = 0;
+  const sampleDir = loc && loc.sampleDir, song = loc && loc.song;
   for (const s of (data.stems || [])) {
-    // analysis.json stem paths vary (relative "stems/x.wav", "output/<song>/stems/x.wav",
-    // or an absolute fs path). The on-disk layout is always output/<song>/stems/<type>.{mp3,wav},
-    // so rebuild from the song folder first, then fall back to the stored path. Prefer the
-    // light mp3 (≈7x smaller) for delivery; fall back to the wav if it isn't there yet.
+    // Bundled samples live at samples/<dir>/stems/<type>.mp3, served same-origin from the
+    // static deploy (localAsset, cacheable) — zero backend round-trip.
+    if (sampleDir) {
+      try { buffers[s.type] = await fetchDecode(localAsset(`samples/${sampleDir}/stems/${s.type}.mp3`), "default"); ok++; continue; }
+      catch (e) { /* a bundled mp3 should always exist; leave this stem missing */ }
+    }
+    // Backend song: analysis.json stem paths vary (relative "stems/x.wav",
+    // "output/<song>/stems/x.wav", or an absolute fs path). The on-disk layout is always
+    // output/<song>/stems/<type>.{mp3,wav}, so rebuild from the song folder first, then fall
+    // back to the stored path. Prefer the light mp3 (≈7x smaller); fall back to the wav.
     const tries = [];
     if (song) { tries.push(`output/${song}/stems/${s.type}.mp3`); tries.push(`output/${song}/stems/${s.type}.wav`); }
     if (s.path) {
@@ -627,6 +745,19 @@ async function renderMedley(song, swaps, onStatus) {
   return info;
 }
 
+/* Matchmaker: POST a dropped sound to /api/match and get parts ranked best→worst, each
+   with the sub-region of the sound that fits best. The song must exist on the backend
+   (output/<song>/analysis.json) — feature vectors for its parts are cached server-side
+   on first call. The body is the raw (dry, untrimmed) sound so the ranking reflects the
+   sound itself, not a per-part trim. */
+async function matchSound(song, file) {
+  const r = await fetch(api(`/api/match?song=${encodeURIComponent(song)}&name=${encodeURIComponent(file.name || "sound.wav")}`),
+    { method: "POST", body: file });
+  let info; try { info = await r.json(); } catch (e) { throw new Error("HTTP " + r.status); }
+  if (!r.ok || info.error) throw new Error(info.error || ("HTTP " + r.status));
+  return info;   // { sound_len_sec, recommendations:[{label,stem,name,count,slot_sec,tier,score,best_offset}] }
+}
+
 /* ============================================================ primitives */
 function Button({ variant = "primary", size = "md", block, style, children, ...rest }) {
   return <button className={`k-btn k-btn--${variant} k-btn--${size}${block ? " k-btn--block" : ""}`} style={style} {...rest}>{children}</button>;
@@ -691,9 +822,16 @@ function App() {
   const [toast, setToast] = useState(null);
   const flash = (msg, err) => { setToast({ msg, err }); clearTimeout(flash._t); flash._t = setTimeout(() => setToast(null), err ? 4200 : 2600); };
 
-  const loadSong = async (name) => {
+  const loadSong = async (target) => {
+    // target is a backend song name (string, from the upload/split flow) or a bundled
+    // sample {name, dir} from samples/index.json. Samples load entirely from the static
+    // deploy (analysis.json + mp3 stems via localAsset) — zero backend, no Modal cold start.
+    const sample = (target && typeof target === "object") ? target : null;
+    const name = sample ? sample.name : target;
     flash("loading " + name + " …");
-    const res = await fetch(asset(`output/${name}/analysis.json`), { cache: "no-store" });
+    const analysisUrl = sample ? localAsset(`samples/${sample.dir}/analysis.json`)
+                               : asset(`output/${name}/analysis.json`);
+    const res = await fetch(analysisUrl, { cache: sample ? "default" : "no-store" });
     if (!res.ok) throw new Error("could not load analysis.json");
     const j = await res.json();
     engReset(); setBounce(null); setMixView("remix");
@@ -701,7 +839,7 @@ function App() {
     // Decode the stems BEFORE dropping the user on the timeline, so the loading screen
     // stays up until the audio is actually ready — no dead-air gap where the timeline
     // shows but nothing plays. Then flag autoplay so the studio starts the song itself.
-    const ok = await loadStems(j, name);
+    const ok = await loadStems(j, sample ? { sampleDir: sample.dir } : { song: name });
     Eng.autoplay = ok > 0;
     setStep("studio");
     flash(ok ? `loaded ${name} · ${ok}/4 stems` : "loaded (audio unavailable)", !ok);
@@ -742,11 +880,13 @@ function Upload({ setStep, setSong, loadSong, flash }) {
     } catch (e) { flash("upload failed: " + e.message + " (is server.py running?)", true); }
   };
   const openSamples = async () => {
+    // Samples are bundled into the static deploy (samples/index.json), not fetched from
+    // the backend — so the picker opens with zero Modal calls.
     try {
-      const list = await (await fetch(api("/api/songs"))).json();
-      if (!list.length) return flash("no processed songs yet — upload one", true);
+      const list = await (await fetch(localAsset("samples/index.json"), { cache: "default" })).json();
+      if (!list.length) return flash("no samples bundled yet", true);
       setSongs(list);
-    } catch (e) { flash("backend unreachable", true); }
+    } catch (e) { flash("samples unavailable", true); }
   };
 
   return (
@@ -794,12 +934,15 @@ function Upload({ setStep, setSong, loadSong, flash }) {
         <div className="scrim" onClick={() => setSongs(null)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <span className="grab" />
-            <div className="shead"><div style={{ flex: 1 }}><div className="st">try a sample</div><div className="ss">{songs.length} processed song{songs.length === 1 ? "" : "s"}</div></div>
+            <div className="shead"><div style={{ flex: 1 }}><div className="st">try a sample</div><div className="ss">{songs.length} ready to remix · loads instantly</div></div>
               <IconButton size="sm" onClick={() => setSongs(null)}>✕</IconButton></div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {songs.map((s) => (
-                <div className="lrow" key={s} style={{ cursor: "pointer" }} onClick={() => { ensureCtx(); setSongs(null); setLoading(true); loadSong(s).catch((e) => { setLoading(false); flash(e.message, true); }); }}>
-                  <span style={{ fontSize: 16 }}>🎵</span><span className="fn" style={{ flex: 1 }}>{s}</span><span style={{ color: "var(--ink-3)" }}>→</span>
+                <div className="lrow" key={s.dir} style={{ cursor: "pointer" }} onClick={() => { ensureCtx(); setSongs(null); setLoading(true); loadSong(s).catch((e) => { setLoading(false); flash(e.message, true); }); }}>
+                  <span style={{ fontSize: 16 }}>🎵</span>
+                  <span className="fn" style={{ flex: 1 }}>{s.name}</span>
+                  <span style={{ color: "var(--ink-3)", fontSize: 12 }}>{fmt(s.duration_sec)}</span>
+                  <span style={{ color: "var(--ink-3)" }}>→</span>
                 </div>
               ))}
             </div>
@@ -881,6 +1024,7 @@ function Studio({ data, song, swaps, setSwaps, setStep, flash, bounce, setBounce
   const [loopLabel, setLoopLabel] = useState(null);
   const [sheet, setSheet] = useState(null);        // label being swapped
   const [showList, setShowList] = useState(false);
+  const [mm, setMm] = useState(false);             // matchmaker (sound-first) open
   const scrollRef = useRef(null);
   const dur = data.duration_sec || 1;
   const trackW = Math.max(1, dur * PPS);
@@ -950,7 +1094,10 @@ function Studio({ data, song, swaps, setSwaps, setStep, flash, bounce, setBounce
           🎚 {swapCount} swap{swapCount === 1 ? "" : "s"}</button>
       </header>
 
-      <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".08em", margin: "13px 2px 11px" }}>tap a part to hear it + swap its sound</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, margin: "13px 2px 11px" }}>
+        <button className="mm-launch" onClick={() => setMm(true)}>✨ drop a sound</button>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)", lineHeight: 1.3 }}>find its best-fit parts — or tap a part to swap it</span>
+      </div>
 
       <div ref={scrollRef} className="tlscroll" style={{ flex: "1 1 0", minHeight: 0 }}>
         <div className="tl">
@@ -996,6 +1143,7 @@ function Studio({ data, song, swaps, setSwaps, setStep, flash, bounce, setBounce
 
       {sheet && <SwapSheet data={data} song={song} label={sheet} current={swaps[sheet]} onClose={closeSheet} onUse={onUse} flash={flash} />}
       {showList && <SwapList data={data} swaps={swaps} onClose={() => setShowList(false)} onRevert={revert} onEdit={(l) => { setShowList(false); tapPart(l); }} />}
+      {mm && <Matchmaker data={data} song={song} swaps={swaps} setSwaps={setSwaps} onClose={() => setMm(false)} flash={flash} />}
     </div>
   );
 }
@@ -1143,6 +1291,7 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
   const stem = stemOf(data, label); const part = partOf(data, label);
   const cap = partMaxLen(part);                           // longest the replacement may run
   const [swap, setSwap] = useState(current || null);     // {name,fx,rawBuf,file,trim}
+  const [source, setSource] = useState(null);            // null | "kit" | "upload" | "record" — which picker is open
   const [ab, setAb] = useState(current ? "new" : "orig");
   const [paused, setPaused] = useState(false);           // preview loop play/pause
   const [busy, setBusy] = useState(false);
@@ -1205,6 +1354,23 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
     prevDur.current = 0;
     setSwap({ name: file.name, fx: [], file, rawBuf, stem, trim: { start: 0, end: 0 } }); setAb("new");
   };
+  // a kit sound: fetch ONE mp3 on tap (cacheable), decode it, and load it exactly like an
+  // uploaded file (file:null — bakeSwapFile/bakeSwapBuffer bake from rawBuf downstream).
+  const chooseKitSound = async (snd) => {
+    let rawBuf = null;
+    try { rawBuf = await fetchDecode(kitUrl(snd.file), "default"); }
+    catch (e) { flash("couldn't load that sound", true); return; }
+    prevDur.current = 0;
+    setSwap({ name: snd.name + ".wav", fx: [], file: null, rawBuf, stem, trim: { start: 0, end: 0 } }); setAb("new");
+  };
+  // open a picker. kit just docks the browser; upload opens the file dialog; record arms the mic.
+  const pickSource = (s) => {
+    setSource(s);
+    if (s === "upload") fileRef.current && fileRef.current.click();
+    else if (s === "record") rec.toggle();
+  };
+  // back out of a loaded sound / picker to the three-way chooser
+  const changeSource = () => { setSwap(null); setSource(null); setAb("orig"); };
   const toggleFx = (id) => setSwap((s) => ({ ...s, fx: s.fx.includes(id) ? s.fx.filter((x) => x !== id) : [...s.fx, id] }));
   const zoomView = (factor) => baked && setView(zoomTo(baked.duration, trim, cap, Math.max(0.2, (view.end - view.start) * factor)));
   const resetTrim = () => { if (!baked) return; const nt = { start: 0, end: Math.min(baked.duration, cap) }; setTrim(nt); setView(zoomTo(baked.duration, nt, cap)); };
@@ -1254,7 +1420,9 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
 
         <div>
           <div className="lbl" style={{ marginBottom: 6 }}>your sound</div>
-          {swap ? (
+
+          {/* loaded sound → trim + effects editor (same for kit / upload / record) */}
+          {swap && (
             <React.Fragment>
               <div className={"cmp" + (ab === "new" ? " act" : "")}>
                 <Waveform seed={swap.name + swap.fx.join("")} count={46} height={42} color="var(--brand)" progress={1} />
@@ -1270,6 +1438,7 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
                     <button className="zb" aria-label="zoom in" onClick={() => zoomView(1 / 1.5)}>+</button>
                     <button className="tx" onClick={resetTrim}>fit</button>
                     <button className="tx" onClick={() => { setAb("new"); setPaused(false); }}>▶ preview</button>
+                    <button className="tx" onClick={() => setPaused((p) => !p)}>{paused ? "▶ play" : "⏸ pause"}</button>
                   </div>
                 </React.Fragment>
               )}
@@ -1280,25 +1449,110 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
                 ))}
               </div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", marginTop: 9, lineHeight: 1.45, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <button onClick={() => { setSwap(null); setAb("orig"); }} style={{ fontFamily: "var(--font-mono)", fontSize: 11, background: "var(--stage-3)", boxShadow: "inset 0 0 0 1px var(--line)", color: "var(--ink-1)", border: "none", borderRadius: 999, padding: "5px 10px", cursor: "pointer" }}>↩ change file</button>
-                <span>effects bake into your sound · fills all ×{part.occurrence_count} spots</span>
+                <button onClick={changeSource} style={{ fontFamily: "var(--font-mono)", fontSize: 11, background: "var(--stage-3)", boxShadow: "inset 0 0 0 1px var(--line)", color: "var(--ink-1)", border: "none", borderRadius: 999, padding: "5px 10px", cursor: "pointer" }}>↩ change source</button>
+                <span>{source === "kit" ? "pick another from the kit below · " : ""}fills all ×{part.occurrence_count} spots</span>
               </div>
             </React.Fragment>
-          ) : (
-            <div className="drop" onClick={() => fileRef.current.click()}>
-              <div style={{ fontSize: 26 }}>⬆</div>
-              <div>choose your sound</div>
+          )}
+
+          {/* kit browser — stays docked while browsing kits so you can audition sound after sound */}
+          {source === "kit" && (
+            <div style={{ marginTop: swap ? 11 : 0 }}>
+              <KitBrowser current={swap} onPick={chooseKitSound} onAltSource={pickSource} flash={flash} />
+            </div>
+          )}
+
+          {/* recording in progress */}
+          {!swap && source === "record" && rec.recording && (
+            <div className="drop">
+              <div style={{ fontSize: 22, color: "var(--brand)" }}>●</div>
+              <div>recording…</div>
+              <div className="row"><Button size="sm" variant="primary" onClick={() => rec.toggle()}>■ stop</Button></div>
+              <div className="mini">tap stop when you're done</div>
+            </div>
+          )}
+
+          {/* three-way chooser — nothing loaded, not browsing a kit, not recording */}
+          {!swap && source !== "kit" && !(source === "record" && rec.recording) && (
+            <div className="chooser">
+              <div style={{ fontSize: 22, lineHeight: 1 }}>⬆</div>
+              <div className="tt">choose your sound</div>
               <div className="row">
-                <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); fileRef.current.click(); }}>⬆ upload</Button>
-                <Button size="sm" variant={rec.recording ? "primary" : "ghost"} onClick={(e) => { e.stopPropagation(); rec.toggle(); }}>{rec.recording ? "■ stop" : "● record"}</Button>
+                <button className="pick lead" onClick={() => pickSource("kit")}><span className="ic">🗂</span><span className="nm">from a kit</span></button>
+                <button className="pick" onClick={() => pickSource("upload")}><span className="ic">⬆</span><span className="nm">upload</span></button>
+                <button className="pick" onClick={() => pickSource("record")}><span className="ic">●</span><span className="nm">record</span></button>
               </div>
-              <div className="mini">your file, placed raw — then add effects</div>
+              <div className="mini">browse your kits, drop a file, or record — then trim &amp; add effects</div>
             </div>
           )}
         </div>
 
         <Button block size="lg" disabled={!swap || busy} onClick={use} style={{ marginTop: 2 }}>
           {busy ? "preparing…" : (current ? "update swap →" : "use it →")}</Button>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ Kit browser
+   Folder chips → sound list, built from the small index.json manifest (loaded once,
+   cached). Audio is fetched lazily — ONE mp3 per tap (onPick → chooseKitSound), never in
+   bulk — so a 2,400-sound, 2.2 GB pack browses with near-zero data until you commit. */
+function KitBrowser({ current, onPick, onAltSource, flash }) {
+  const [kits, setKits] = useState(null);     // manifest.kits, or null while loading
+  const [err, setErr] = useState(false);
+  const [fi, setFi] = useState(0);            // selected folder index
+
+  useEffect(() => {
+    let alive = true;
+    loadKitManifest().then(
+      (m) => { if (alive) setKits((m && m.kits) || []); },
+      () => { if (alive) { setErr(true); flash && flash("kit unavailable", true); } }
+    );
+    return () => { alive = false; };
+  }, []);
+
+  const altRow = (
+    <div style={{ padding: "0 13px 12px", display: "flex", gap: 6, justifyContent: "center" }}>
+      <button className="srcb" onClick={() => onAltSource("upload")}>⬆ upload</button>
+      <button className="srcb" onClick={() => onAltSource("record")}>● record</button>
+    </div>
+  );
+  if (err) return <div className="kb"><div className="kbmsg">couldn't load the kit — try another source.</div>{altRow}</div>;
+  if (!kits) return <div className="kb"><div className="kbmsg">loading kit…</div></div>;
+  if (!kits.length) return <div className="kb"><div className="kbmsg">kit is empty.</div>{altRow}</div>;
+
+  const kit = kits[Math.min(fi, kits.length - 1)];
+  return (
+    <div className="kb">
+      <div className="kbtop">
+        <span className="t">your kits</span>
+        <div className="src">
+          <button className="srcb on">🗂 kit</button>
+          <button className="srcb" onClick={() => onAltSource("upload")}>⬆ upload</button>
+          <button className="srcb" onClick={() => onAltSource("record")}>● record</button>
+        </div>
+      </div>
+      <div className="folders">
+        {kits.map((k, i) => (
+          <button key={k.slug} className={"fchip" + (i === fi ? " on" : "")} onClick={() => setFi(i)}>
+            <span className="fn">{k.name}</span>
+            <span className="fc">{k.count} sounds</span>
+          </button>
+        ))}
+      </div>
+      <div className="slist">
+        {kit.sounds.map((snd) => {
+          const on = current && current.name === snd.name + ".wav";
+          return (
+            <button key={snd.file} className={"srow" + (on ? " on" : "")} onClick={() => onPick(snd)}>
+              <span className="pl">{on ? "⟲" : "▶"}</span>
+              <span className="fn">{snd.name}</span>
+              <span className="wv"><Waveform seed={snd.file} count={18} height={20} color={on ? "var(--brand)" : "var(--ink-3)"} /></span>
+              <span className="ln">{typeof snd.dur === "number" ? snd.dur.toFixed(2) + "s" : ""}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -1327,6 +1581,349 @@ function SwapList({ data, swaps, onClose, onRevert, onEdit }) {
           ))}
         </div>
         <Button block size="lg" onClick={onClose} style={{ marginTop: 4 }}>done — back to timeline</Button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================ Matchmaker
+   The sound-first flow (Claude Design ui_kits/matchmaker, variant C "duel split"):
+   drop ONE sound → we analyze it → rank every part best→worst (with a "worst fit ·
+   for the memes" chaos tail) → confirm as many swaps as you like → back to the timeline.
+   Ranking comes from the backend (/api/match); previews + confirm reuse the same engine
+   and swaps model as the part-first SwapSheet, so a confirmed match is just a normal swap
+   whose trim = the sound's best-fit sub-region for that part. */
+
+/* the part's waveform flanked by faded ±1s of song context (best_offset reads against
+   the whole sound; this reads against the slot) */
+function ContextWave({ stem, seed, slot, count = 50, height = 40, progress = null }) {
+  const ctx = 1 / (slot + 2);                     // fraction one 1s context side takes
+  const data = seededBars(seed, count);
+  return (
+    <div className="mm-wave" style={{ height }}>
+      {data.map((v, i) => {
+        const f = i / (count - 1);
+        const inPart = f >= ctx && f <= 1 - ctx;
+        const played = progress != null && f <= progress;
+        const op = inPart ? 0.92 : 0.26;
+        return <span key={i} className="b" style={{
+          height: Math.max(8, v * 100 * (inPart ? 1 : 0.62)) + "%",
+          background: inPart ? `var(--stem-${stem})` : "var(--ink-3)",
+          opacity: played ? Math.max(op, 1) : op }} />;
+      })}
+      <span className="mm-ctxedge" style={{ left: (ctx * 100) + "%" }} />
+      <span className="mm-ctxedge" style={{ left: ((1 - ctx) * 100) + "%" }} />
+      {progress != null && <span className="mm-head" style={{ left: (progress * 100) + "%" }} />}
+    </div>
+  );
+}
+/* the dropped sound, full length, with the chosen best-fit sub-region windowed in magenta */
+function MiniTrim({ off, len, count = 48, height = 34, progress = null }) {
+  const a = (off[0] || 0) / len, b = (off[1] || len) / len;
+  const data = seededBars("snd" + off.join(), count);
+  return (
+    <div className="mm-wave" style={{ height }}>
+      {data.map((v, i) => {
+        const f = i / (count - 1);
+        const inW = f >= a && f <= b;
+        const head = progress != null ? a + (b - a) * progress : -1;
+        const played = progress != null && f <= head;
+        return <span key={i} className="b" style={{
+          height: Math.max(8, v * 100) + "%",
+          background: inW ? "var(--brand)" : "var(--ink-3)",
+          opacity: inW ? (played || progress == null ? 1 : 0.85) : 0.22 }} />;
+      })}
+      <span className="mm-trimwin" style={{ left: (a * 100) + "%", width: ((b - a) * 100) + "%" }} />
+      {progress != null && <span className="mm-head" style={{ left: ((a + (b - a) * progress) * 100) + "%" }} />}
+    </div>
+  );
+}
+function PlayDot({ on, color, onClick, title }) {
+  return <button className={"mm-pd" + (on ? " on" : "")} onClick={onClick} title={title}
+    style={on ? { background: color || "var(--brand)", boxShadow: "none" } : null}>{on ? "⏸" : "▶"}</button>;
+}
+function MMDivider({ label, color }) {
+  return <div className="mm-div">
+    <span className="ln" style={{ background: color ? color + "55" : null }} />
+    <span className="tx" style={{ color: color || "var(--ink-3)" }}>{label}</span>
+    <span className="ln" style={{ background: color ? color + "55" : null }} />
+  </div>;
+}
+
+/* one shared preview player: real Web Audio (the dropped sound's sub-region, or the part's
+   representative bar via playReference), plus a looping progress head for the waveform. Only
+   one thing plays at a time; tapping the active row again stops it. */
+function useMatchPreview(dropped, song, flash) {
+  const [cur, setCur] = useState(null);     // { id, which }
+  const [p, setP] = useState(0);
+  const srcRef = useRef(null), startRef = useRef(0), lenRef = useRef(1), rafRef = useRef(0);
+  const stop = () => {
+    if (srcRef.current) { try { srcRef.current.stop(); } catch (e) {} srcRef.current = null; }
+    engStopReference();
+    cancelAnimationFrame(rafRef.current);
+  };
+  const stopAll = () => { stop(); setCur(null); };
+  const tick = () => {
+    const el = (performance.now() / 1000 - startRef.current) % lenRef.current;
+    setP(el / lenRef.current);
+    rafRef.current = requestAnimationFrame(tick);
+  };
+  const play = (id, which, opts) => {
+    const same = cur && cur.id === id && cur.which === which;
+    engPause(); stop();
+    if (same) { setCur(null); return; }
+    try {
+      if (which === "snd") {
+        if (!dropped || !dropped.rawBuf) { flash("can't preview this sound", true); return; }
+        const ctx = ensureCtx(); const src = ctx.createBufferSource(); src.buffer = dropped.rawBuf;
+        const a = Math.max(0, opts.off[0] || 0), b = Math.max(a + 0.05, opts.off[1] || dropped.rawBuf.duration);
+        src.loop = true; src.loopStart = a; src.loopEnd = b; src.connect(Eng.master);
+        try { src.start(0, a); } catch (e) {}
+        srcRef.current = src; lenRef.current = b - a;
+      } else {
+        playReference(song, opts.label).catch(() => flash("preview unavailable", true));
+        lenRef.current = Math.max(0.3, opts.dur || 2);
+      }
+      startRef.current = performance.now() / 1000; setP(0); setCur({ id, which });
+      cancelAnimationFrame(rafRef.current); tick();
+    } catch (e) { flash("preview failed", true); }
+  };
+  useEffect(() => () => stop(), []);
+  return { play, stop: stopAll,
+    isOn: (id, w) => !!(cur && cur.id === id && cur.which === w),
+    at: (id, w) => (cur && cur.id === id && cur.which === w) ? p : null };
+}
+
+/* feature-timeline scan while /api/match runs (loops until results arrive) */
+const MM_FEATURES = ["percussive / pitched", "spectral centroid", "onset density", "chroma ×12", "mfcc ×13", "rms envelope"];
+function Analyzing({ soundName, soundLen }) {
+  const [t, setT] = useState(0);
+  useEffect(() => {
+    const start = performance.now(); let raf;
+    const tick = (now) => { setT(((now - start) / 2200) % 1); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick); return () => cancelAnimationFrame(raf);
+  }, []);
+  const CELLS = 22;
+  const COLS = ["var(--stem-vocals)", "var(--stem-drums)", "var(--stem-bass)", "var(--stem-other)", "var(--brand)", "var(--stem-drums)"];
+  return (
+    <div className="mm-an">
+      <div className="ttl">analyzing your sound…</div>
+      <div className="mm-snd" style={{ boxShadow: "inset 0 0 0 1px var(--brand)" }}>
+        <span style={{ fontSize: 16 }}>🎚</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="nm" style={{ color: "var(--brand)" }}>{soundName}</div>
+          <div className="mt">{soundLen ? soundLen.toFixed(1) + "s · ~" + Math.round(soundLen / 0.1) + " frames" : "reading…"}</div>
+        </div>
+      </div>
+      <div className="mm-scan">
+        <div className="mm-feat">
+          {MM_FEATURES.map((fl, ri) => (
+            <div className="frow" key={fl}>
+              <span className="fl">{fl}</span>
+              <span className="cells">
+                {Array.from({ length: CELLS }).map((_, ci) => {
+                  const reach = t * CELLS, lit = ci < reach, edge = lit && ci > reach - 2.2;
+                  const v = seededBars(fl + ci, CELLS)[ci], col = COLS[ri];
+                  return <span key={ci} style={{ background: lit ? col : "var(--stage-3)",
+                    opacity: lit ? (0.35 + v * 0.65) : 1, boxShadow: edge ? "0 0 8px " + col : "none" }} />;
+                })}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="mm-scanhead" style={{ left: `calc(12px + (100% - 24px - 96px - 9px) * ${t} + 96px + 9px)` }} />
+      </div>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", paddingLeft: 2 }}>
+        ranking every part by fit — best → worst
+      </div>
+    </div>
+  );
+}
+
+/* one ranked result: your sound (magenta, left) vs the part (stem color, right), head-to-head */
+function MMRow({ r, player, on, onToggle, soundLen }) {
+  const off = [r.best_offset.start_sec, r.best_offset.end_sec];
+  const sndOn = player.isOn(r.label, "snd"), partOn = player.isOn(r.label, "part");
+  const uses = "uses " + off[0].toFixed(1) + "–" + off[1].toFixed(1) + "s";
+  return (
+    <div style={{ background: "var(--surface)", borderRadius: 18, overflow: "hidden",
+      boxShadow: on ? "inset 0 0 0 1.5px var(--success), 0 8px 26px rgba(54,217,138,.18)" : "inset 0 0 0 1px var(--line)",
+      transition: "box-shadow var(--dur-base) var(--ease-out)" }}>
+      <div style={{ display: "flex", alignItems: "stretch" }}>
+        <button onClick={() => player.play(r.label, "snd", { off })}
+          style={{ flex: 1, minWidth: 0, border: "none", cursor: "pointer", textAlign: "left",
+            background: "var(--brand-soft)", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span style={{ fontSize: 12 }}>{sndOn ? "⏸" : "▶"}</span>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--brand)" }}>your sound</span>
+          </div>
+          <MiniTrim off={off} len={soundLen} count={30} height={30} progress={player.at(r.label, "snd")} />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--brand)" }}>{uses}</span>
+        </button>
+        <div style={{ flex: "none", width: 36, display: "grid", placeItems: "center", background: "var(--stage-0)" }}>
+          <span style={{ width: 26, height: 26, borderRadius: 999, display: "grid", placeItems: "center", background: "var(--stage-2)",
+            boxShadow: "inset 0 0 0 1px var(--line-strong)", fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 10, color: "var(--ink-2)" }}>vs</span>
+        </div>
+        <button onClick={() => player.play(r.label, "part", { label: r.label, dur: r.slot_sec + 2 })}
+          style={{ flex: 1, minWidth: 0, border: "none", cursor: "pointer", textAlign: "right",
+            background: `var(--stem-${r.stem}-soft)`, padding: 12, display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, flexDirection: "row-reverse" }}>
+            <span style={{ fontSize: 12 }}>{partOn ? "⏸" : "▶"}</span>
+            <StemTag stem={r.stem} label={r.label} count={r.count} />
+          </div>
+          <div style={{ width: "100%" }}><ContextWave stem={r.stem} seed={r.label + "ctx"} slot={r.slot_sec} count={30} height={30} progress={player.at(r.label, "part")} /></div>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: `var(--stem-${r.stem})` }}>{r.name} · ±1s</span>
+        </button>
+      </div>
+      <button className={"mm-match " + (on ? "done" : "idle")} style={{ width: "100%", height: 42, fontSize: 14, borderRadius: 0 }}
+        onClick={() => onToggle(r)}>
+        {on ? ("✓ matched · ×" + r.count) : ("swap " + r.label + " for your sound · ×" + r.count)}
+      </button>
+    </div>
+  );
+}
+
+/* the three-way "drop a sound" chooser (kit docks the browser; upload/record reuse the
+   shared pickers). Mirrors the SwapSheet chooser, but sound-first. */
+function MMAdd({ source, setSource, onKit, rec, pickUpload, flash }) {
+  return (
+    <React.Fragment>
+      <div className="chooser">
+        <div style={{ fontSize: 22, lineHeight: 1 }}>⬆</div>
+        <div className="tt">drop a sound</div>
+        <div className="row">
+          <button className={"pick" + (source === "kit" ? " lead" : "")} onClick={() => setSource("kit")}><span className="ic">🗂</span><span className="nm">from a kit</span></button>
+          <button className="pick" onClick={() => { setSource("upload"); pickUpload(); }}><span className="ic">⬆</span><span className="nm">upload</span></button>
+          <button className="pick" onClick={() => { setSource("record"); rec.toggle(); }}><span className="ic">●</span><span className="nm">record</span></button>
+        </div>
+        <div className="mini">we'll listen to it and rank where it fits — best → worst</div>
+      </div>
+      {source === "kit" && (
+        <div style={{ marginTop: 11 }}>
+          <KitBrowser current={null} onPick={onKit} flash={flash}
+            onAltSource={(s) => { setSource(s); if (s === "upload") pickUpload(); else if (s === "record") rec.toggle(); }} />
+        </div>
+      )}
+      {source === "record" && rec.recording && (
+        <div className="drop" style={{ marginTop: 11 }}>
+          <div style={{ fontSize: 22, color: "var(--brand)" }}>●</div><div>recording…</div>
+          <div className="row"><Button size="sm" variant="primary" onClick={() => rec.toggle()}>■ stop</Button></div>
+          <div className="mini">tap stop when you're done — then we match it</div>
+        </div>
+      )}
+    </React.Fragment>
+  );
+}
+
+function Matchmaker({ data, song, swaps, setSwaps, onClose, flash }) {
+  const [phase, setPhase] = useState("add");     // add | analyzing | results
+  const [source, setSource] = useState("kit");
+  const [dropped, setDropped] = useState(null);  // { name, file, rawBuf } — the dry sound
+  const [recs, setRecs] = useState(null);
+  const [soundLen, setSoundLen] = useState(0);
+  const fileRef = useRef(null);
+  const rec = useRecorder((f) => onDrop(f));
+  const player = useMatchPreview(dropped, song, flash);
+  const matched = recs ? recs.filter((r) => swaps[r.label]).length : Object.keys(swaps).length;
+
+  const runMatch = async (d) => {
+    setPhase("analyzing"); setRecs(null);
+    try {
+      // dry, untrimmed wav so the ranking reflects the sound itself
+      const file = await bakeSwapFile({ rawBuf: d.rawBuf, fx: [], name: d.name, file: d.file });
+      const [info] = await Promise.all([matchSound(song, file), new Promise((r) => setTimeout(r, 1400))]);
+      setRecs(info.recommendations || []);
+      setSoundLen(info.sound_len_sec || (d.rawBuf ? d.rawBuf.duration : 1));
+      setPhase("results");
+    } catch (e) { flash("matchmaker: " + e.message, true); setPhase("add"); }
+  };
+  const onDrop = async (file) => {
+    let rawBuf = null;
+    try { rawBuf = await decodeFile(file); } catch (e) { flash("can't preview this format — will match raw", true); }
+    const d = { name: file.name, file, rawBuf }; setDropped(d); runMatch(d);
+  };
+  const onKit = async (snd) => {
+    let rawBuf = null;
+    try { rawBuf = await fetchDecode(kitUrl(snd.file), "default"); }
+    catch (e) { flash("couldn't load that sound", true); return; }
+    const d = { name: snd.name + ".wav", file: null, rawBuf }; setDropped(d); runMatch(d);
+  };
+  const pickUpload = () => fileRef.current && fileRef.current.click();
+
+  // confirm/unconfirm a part → a normal swap whose trim = this part's best-fit sub-region
+  const toggle = async (r) => {
+    const label = r.label;
+    if (swaps[label]) { setSwaps((m) => { const n = { ...m }; delete n[label]; return n; }); return; }
+    const part = partOf(data, label); const cap = partMaxLen(part);
+    const off = r.best_offset;
+    const maxEnd = dropped && dropped.rawBuf ? dropped.rawBuf.duration : off.end_sec;
+    const trim = { start: off.start_sec, end: Math.min(off.end_sec, off.start_sec + cap, maxEnd) };
+    let file;
+    try { file = await bakeSwapFile({ rawBuf: dropped.rawBuf, fx: [], trim, name: dropped.name, file: dropped.file }); }
+    catch (e) { flash("couldn't prep that sound", true); return; }
+    setSwaps((m) => ({ ...m, [label]: { stem: r.stem, fx: [], name: dropped.name, file, rawBuf: dropped.rawBuf, trim } }));
+    flash(`matched ${label} · fills ×${r.count}`);
+  };
+  const close = () => { player.stop(); onClose(); };
+  const replay = () => { player.stop(); setDropped(null); setRecs(null); setSource("kit"); setPhase("add"); };
+
+  const best = recs ? recs.filter((r) => r.tier === "best") : [];
+  const worst = recs ? recs.filter((r) => r.tier === "worst") : [];
+
+  return (
+    <div className="scrim" onClick={close}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <span className="grab" />
+
+        {phase === "add" && (
+          <React.Fragment>
+            <div className="shead">
+              <div style={{ flex: 1 }}><div className="st">matchmaker</div><div className="ss">drop a sound · we find its spot</div></div>
+              <IconButton size="sm" aria-label="close" onClick={close}>✕</IconButton>
+            </div>
+            <input ref={fileRef} type="file" accept="audio/*,.mp3,.wav,.m4a" style={{ display: "none" }}
+              onChange={(e) => { const f = e.target.files[0]; if (f) onDrop(f); }} />
+            <MMAdd source={source} setSource={setSource} onKit={onKit} rec={rec} pickUpload={pickUpload} flash={flash} />
+          </React.Fragment>
+        )}
+
+        {phase === "analyzing" && <Analyzing soundName={dropped ? dropped.name : ""} soundLen={dropped && dropped.rawBuf ? dropped.rawBuf.duration : 0} />}
+
+        {phase === "results" && recs && (
+          <React.Fragment>
+            <div className="shead">
+              <div style={{ flex: 1 }}><div className="st">matchmaker</div><div className="ss">where does it fit?</div></div>
+              <IconButton size="sm" aria-label="close" onClick={close}>✕</IconButton>
+            </div>
+            <div className="mm-snd">
+              <PlayDot on={player.isOn("src", "snd")} title="hear the whole sound" onClick={() => player.play("src", "snd", { off: [0, soundLen] })} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="nm">🎚 {dropped.name}</div>
+                <div style={{ marginTop: 6 }}><MiniTrim off={[0, soundLen]} len={soundLen} count={54} height={22} progress={player.at("src", "snd")} /></div>
+                <div className="mt">{soundLen.toFixed(1)}s · your sound</div>
+              </div>
+              <button className="mm-replay" onClick={replay}>↺ new sound</button>
+            </div>
+
+            {recs.length === 0 && <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)", textAlign: "center", padding: 10 }}>no parts to rank.</div>}
+            {recs.length > 0 && (
+              <React.Fragment>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <span className="lbl">{recs.length} parts ranked by fit</span><span style={{ flex: 1 }} />
+                  <span className="lbl" style={{ color: matched ? "var(--success)" : "var(--ink-3)" }}>{matched ? "✓ " + matched + " matched" : "match any you like"}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+                  {best.map((r) => <MMRow key={r.label} r={r} player={player} on={!!swaps[r.label]} onToggle={toggle} soundLen={soundLen} />)}
+                  {worst.length > 0 && <MMDivider label="💀 worst fit · for the memes" color="var(--danger)" />}
+                  {worst.map((r) => <MMRow key={r.label} r={r} player={player} on={!!swaps[r.label]} onToggle={toggle} soundLen={soundLen} />)}
+                </div>
+              </React.Fragment>
+            )}
+
+            <Button block size="lg" disabled={!matched} onClick={close} style={{ marginTop: 2 }}>
+              {matched ? ("done · " + matched + " swap" + (matched > 1 ? "s" : "") + " → timeline") : "match a part to swap"}</Button>
+          </React.Fragment>
+        )}
       </div>
     </div>
   );
