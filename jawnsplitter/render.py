@@ -43,11 +43,60 @@ def _mono_to_stereo(y: np.ndarray) -> np.ndarray:
     return np.column_stack([y, y]).astype(np.float32)
 
 
+def _match_channels(y: np.ndarray, nch: int) -> np.ndarray:
+    """Coerce a (N,) or (N,C) array to (N, nch): mono → duplicated to every channel."""
+    if y.ndim == 1:
+        y = y[:, None]
+    if y.shape[1] == nch:
+        return y.astype(np.float32)
+    if y.shape[1] == 1:
+        return np.repeat(y, nch, axis=1).astype(np.float32)
+    if y.shape[1] > nch:
+        return y[:, :nch].astype(np.float32)
+    return np.repeat(y[:, :1], nch, axis=1).astype(np.float32)
+
+
+def _edge_fade_st(y: np.ndarray, sr: int, ms: float = 5.0) -> np.ndarray:
+    """Linear in/out fade on a (N,C) array (anti-click), mirror of dsp.edge_fade."""
+    y = np.asarray(y, dtype=np.float32).copy()
+    n = int(ms / 1000.0 * sr)
+    if n <= 0 or 2 * n >= len(y):
+        return y
+    ramp = np.linspace(0.0, 1.0, n, dtype=np.float32)[:, None]
+    y[:n] *= ramp
+    y[-n:] *= ramp[::-1]
+    return y
+
+
+def _region_rms(path: Path, start_sec: float, end_sec: float, sr: int) -> float:
+    """RMS of the original stem over [start,end) — how loud this part actually plays."""
+    s0, s1 = int(start_sec * sr), int(end_sec * sr)
+    if s1 <= s0:
+        return 0.0
+    d, _ = sf.read(str(path), start=s0, stop=s1, always_2d=True)
+    return float(np.sqrt(np.mean(d.astype(np.float32) ** 2))) if d.size else 0.0
+
+
+def _level_gain(sample: np.ndarray, local_rms: float) -> float:
+    """Boost-only level match: lift a quiet sample toward the part's local energy, but never
+    duck a punchy one below its own level (that downward match is what buried swaps in the
+    mix). Capped, with an anti-clip guard so the sample stays under full scale."""
+    s_rms = float(np.sqrt(np.mean(sample.astype(np.float32) ** 2))) if sample.size else 0.0
+    s_peak = float(np.max(np.abs(sample))) if sample.size else 0.0
+    g = 1.0
+    if local_rms > 1e-6 and s_rms > 1e-6:
+        g = min(4.0, max(1.0, local_rms / s_rms))
+    if s_peak > 1e-6:
+        g = min(g, 0.99 / s_peak)
+    return g
+
+
 def _place(dst: np.ndarray, start: int, repl: np.ndarray, xf: int) -> None:
-    """Sum `repl` into `dst` at `start`, crossfading `xf` samples at the leading edge
-    from the original stem into the sample so the swap is click-free. The sample is
-    allowed to ring past its slot (we don't trim it back into the original) — that
-    overlap is what makes a medley messy."""
+    """Overwrite `repl` into `dst` at `start` (per channel), crossfading `xf` samples at the
+    leading edge from the original stem so the swap is click-free. `repl` may be mono or
+    stereo; it's coerced to the destination's channel count (mono → both channels) so a
+    sample's own L/R survives instead of being flattened to dual-mono."""
+    repl = _match_channels(repl, dst.shape[1])
     end = min(start + len(repl), len(dst))
     n = end - start
     if n <= 0:
@@ -63,15 +112,17 @@ def _place(dst: np.ndarray, start: int, repl: np.ndarray, xf: int) -> None:
 
 def _load_sample(song_dir: Path, analysis: dict, stem: str, label: str,
                  sample: str | Path | None, sr: int) -> np.ndarray:
-    """Mono sample for a placement, resampled to the stem's `sr` so its pitch and
-    speed are preserved exactly. With no external sample, the stand-in is the label's
-    own representative bar cut from the stem."""
+    """Stereo (N,C) sample for a placement, resampled to the stem's `sr` so its pitch and
+    speed are preserved exactly. Stereo is kept (not downmixed) so a swap's width and low end
+    survive into the bounce. With no external sample, the stand-in is the label's own
+    representative bar cut from the stem."""
     if sample is not None:
-        data, ssr = sf.read(str(Path(sample)), always_2d=True)
-        y = dsp._as_mono_f32(data)
-        if ssr != sr and y.size:
+        data, ssr = sf.read(str(Path(sample)), always_2d=True)   # (N, C)
+        y = data.astype(np.float32)
+        if ssr != sr and y.shape[0]:
             import librosa
-            y = librosa.resample(y, orig_sr=ssr, target_sr=sr).astype(np.float32)
+            y = np.stack([librosa.resample(y[:, c], orig_sr=ssr, target_sr=sr)
+                          for c in range(y.shape[1])], axis=1).astype(np.float32)
         return y
     bars = analysis["bars"]
     target_wav = song_dir / "stems" / f"{stem}.wav"
@@ -79,7 +130,7 @@ def _load_sample(song_dir: Path, analysis: dict, stem: str, label: str,
                    if p["label"] == label)
     s0, s1 = int(bars[rep_bar]["start_sec"] * sr), int(bars[rep_bar]["end_sec"] * sr)
     d, _ = sf.read(str(target_wav), start=s0, stop=s1, always_2d=True)
-    return dsp._as_mono_f32(d)
+    return d.astype(np.float32)
 
 
 def render_medley(song_dir: str | Path, placements: list[dict],
@@ -142,8 +193,16 @@ def render_medley(song_dir: str | Path, placements: list[dict],
             # occurrence's length, so it fills the part exactly (no mid-occurrence restart,
             # no ring-past). loop: the sample is a one-bar compound beat — tile it bar by
             # bar across the occurrence (overlap-add so fx tails ring across bars), turning a
-            # single hit laid on a step grid into a repeating beat. level-match once.
-            snapped = snap(sample_y, sr, entry["targets"][0])
+            # single hit laid on a step grid into a repeating beat.
+            #
+            # Level is boost-only to how loud THIS part plays (the original stem's energy
+            # under its representative bar), keeping the sample's stereo — so the bounce has
+            # the same punch and width as the studio timeline, not a ducked mono swap.
+            rep_bar = next(p["representative_bar"] for p in analysis["layers"][stem]
+                           if p["label"] == entry["label"])
+            rb = analysis["bars"][rep_bar]
+            local_rms = _region_rms(stem_dir / f"{stem}.wav", rb["start_sec"], rb["end_sec"], sr)
+            leveled = sample_y * _level_gain(sample_y, local_rms)   # (N, C)
             by_occ: dict[int, list] = {}
             for t in entry["targets"]:
                 by_occ.setdefault(t.occurrence_id, []).append(t)
@@ -156,16 +215,16 @@ def render_medley(song_dir: str | Path, placements: list[dict],
                 if n <= 0:
                     continue
                 if entry.get("loop"):
-                    piece = np.zeros(n, dtype=np.float32)
+                    piece = np.zeros((n, leveled.shape[1]), dtype=np.float32)
                     for t in ts:                       # one loop copy per bar of the part
                         bs = int(round((t.start_sec - occ_start) * sr))
-                        m = min(len(snapped), n - bs)
+                        m = min(len(leveled), n - bs)
                         if bs >= 0 and m > 0:
-                            piece[bs:bs + m] += snapped[:m]
-                    piece = dsp.edge_fade(piece, sr, 5.0)
+                            piece[bs:bs + m] += leveled[:m]
+                    piece = _edge_fade_st(piece, sr, 5.0)
                 else:
-                    piece = dsp.edge_fade(snapped[:n], sr, 5.0)
-                _place(new_stem, int(round(occ_start * sr)), _mono_to_stereo(piece), xf)
+                    piece = _edge_fade_st(leveled[:n], sr, 5.0)
+                _place(new_stem, int(round(occ_start * sr)), piece, xf)
                 slots += 1
         else:
             for t in entry["targets"]:
@@ -190,9 +249,10 @@ def render_medley(song_dir: str | Path, placements: list[dict],
     for x in layers:
         mix += x[:n]
 
+    # Boost-only swaps can run the sum hot; soft-limit tames the peaks without ducking the
+    # whole bounce the way a global peak-normalize would (which re-muted the loud swaps).
     peak = float(np.max(np.abs(mix))) if mix.size else 0.0
-    if peak > 0.999:
-        mix *= 0.999 / peak
+    mix = dsp.soft_limit(mix, ceiling=0.98)
 
     out = Path(out_dir) if out_dir else (song_dir / "render" / out_name)
     out.mkdir(parents=True, exist_ok=True)

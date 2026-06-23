@@ -103,6 +103,28 @@ def edge_fade(y: np.ndarray, sr: int, ms: float = 5.0) -> np.ndarray:
     return y
 
 
+def soft_limit(y: np.ndarray, ceiling: float = 0.98, knee: float = 0.6) -> np.ndarray:
+    """Vectorized soft-clip peak limiter on a (N,) or (N,C) float array.
+
+    Samples below `knee*ceiling` pass through untouched (no loudness loss); anything
+    louder is bent through tanh so it asymptotes to — but never reaches — `ceiling`.
+    Unlike a global peak-normalize (which turns the WHOLE mix down when one peak is hot),
+    this only tames the peaks, so a boost-only mix stays loud while staying clean.
+    """
+    y = np.asarray(y, dtype=np.float32)
+    thr = float(knee) * float(ceiling)
+    if ceiling <= thr:
+        return np.clip(y, -ceiling, ceiling).astype(np.float32)
+    a = np.abs(y)
+    over = a > thr
+    if not over.any():
+        return y.copy()
+    out = y.copy()
+    sat = thr + (ceiling - thr) * np.tanh((a[over] - thr) / (ceiling - thr))
+    out[over] = np.sign(y[over]) * sat
+    return out.astype(np.float32)
+
+
 def _selftest() -> None:
     """Step 3 acceptance: round-trip + measurable length/pitch/loudness changes."""
     sr = 22050

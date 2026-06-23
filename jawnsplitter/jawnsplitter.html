@@ -593,44 +593,49 @@ async function renderFx(rawBuf, fxSet) {
   node.connect(octx.destination); src.start(0);
   return await octx.startRendering();
 }
-function encodeWav(samples, sr) {
-  const n = samples.length, ab = new ArrayBuffer(44 + n * 2), dv = new DataView(ab);
+/* encode a mono or stereo PCM16 WAV. `chans` = array of 1-2 equal-length Float32s.
+   Stereo is preserved so the server bounce keeps a swap's width/low end (the export used to
+   downmix to mono, which flattened it). */
+function encodeWav(chans, sr) {
+  const nch = chans.length, n = chans[0].length, frame = nch * 2;
+  const ab = new ArrayBuffer(44 + n * frame), dv = new DataView(ab);
   const ws = (off, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(off + i, s.charCodeAt(i)); };
-  ws(0, "RIFF"); dv.setUint32(4, 36 + n * 2, true); ws(8, "WAVE");
-  ws(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
-  dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
-  ws(36, "data"); dv.setUint32(40, n * 2, true);
+  ws(0, "RIFF"); dv.setUint32(4, 36 + n * frame, true); ws(8, "WAVE");
+  ws(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, nch, true);
+  dv.setUint32(24, sr, true); dv.setUint32(28, sr * frame, true); dv.setUint16(32, frame, true); dv.setUint16(34, 16, true);
+  ws(36, "data"); dv.setUint32(40, n * frame, true);
   let off = 44;
-  for (let i = 0; i < n; i++) { const v = Math.max(-1, Math.min(1, samples[i])); dv.setInt16(off, v < 0 ? v * 0x8000 : v * 0x7fff, true); off += 2; }
+  for (let i = 0; i < n; i++) {
+    for (let c = 0; c < nch; c++) { const v = Math.max(-1, Math.min(1, chans[c][i])); dv.setInt16(off, v < 0 ? v * 0x8000 : v * 0x7fff, true); off += 2; }
+  }
   return new Blob([ab], { type: "audio/wav" });
 }
-/* bake the chosen sound (raw decode + fx + trim) into a mono WAV File ready to upload.
+/* bake the chosen sound (raw decode + fx + trim) into a WAV File ready to upload.
    The trim selection is in the *baked* buffer's timeline (fx like chipmunk change its
    length), so we render fx first and then slice. If it never decoded (rare format),
    fall back to the raw file (no fx / no trim — the server still fits it to the part). */
 async function bakeSwapFile(swap, data, label) {
   if (!swap.rawBuf) return swap.file;
-  // compound: upload the one-bar fx-baked loop; the server tiles it across the part (loop:true).
+  // compound: upload the one-bar fx-baked loop (mono); the server tiles it across the part.
   if (patternHasHits(swap.pattern) && data && label != null) {
     const hit = dryHit(swap);
     const loop = assembleLoopBuffer(hit.mono, hit.sr, swap.pattern, barDurOf(data, partOf(data, label)));
     let lb; try { lb = await renderFx(loop, swap.fx); } catch (e) { lb = loop; }
     const base = swap.name.replace(/\.[^.]+$/, "");
-    return new File([encodeWav(bufToMono(lb), lb.sampleRate)], base + "_loop.wav", { type: "audio/wav" });
+    return new File([encodeWav([bufToMono(lb)], lb.sampleRate)], base + "_loop.wav", { type: "audio/wav" });
   }
   const baked = await renderFx(swap.rawBuf, swap.fx);
   const sr = baked.sampleRate;
-  let mono = bufToMono(baked);
+  let chans = chansOf(baked);                          // keep stereo so the bounce isn't flattened
   const tr = swap.trim;
   const trimmed = tr && (tr.start > 1e-3 || tr.end < baked.duration - 1e-3) && tr.end > tr.start;
   if (trimmed) {
     const s = Math.max(0, Math.floor(tr.start * sr));
-    const e = Math.min(mono.length, Math.ceil(tr.end * sr));
-    mono = mono.subarray(s, Math.max(s + 1, e));
+    const e = Math.min(chans[0].length, Math.ceil(tr.end * sr));
+    chans = chans.map((ch) => ch.subarray(s, Math.max(s + 1, e)));
   }
-  const blob = encodeWav(mono, sr);
   const base = swap.name.replace(/\.[^.]+$/, "");
-  return new File([blob], base + (swap.fx.length ? "_fx" : "") + (trimmed ? "_trim" : "") + ".wav", { type: "audio/wav" });
+  return new File([encodeWav(chans, sr)], base + (swap.fx.length ? "_fx" : "") + (trimmed ? "_trim" : "") + ".wav", { type: "audio/wav" });
 }
 
 /* ---- CLIENT-SIDE SPLICE: build the remix in the browser, no Modal round-trip ----
