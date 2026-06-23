@@ -328,6 +328,11 @@ const kitUrl = (rel) => KIT_BASE + "/" + String(rel).replace(/^\/+/, "").split("
 console.log("[jawnsplitter] API_BASE =", API_BASE || "(same-origin)", "· KIT_BASE =", KIT_BASE);
 
 const STEMS = ["vocals", "drums", "bass", "other"];
+// Which stems can have their parts swapped. Vocals stay in the mix as a fixed backing
+// layer (still decoded, played and exported) but are never a swap target — you swap beats,
+// not voices. The vocals lane is shown so you can still mute it, just with no tappable parts.
+const SWAP_STEMS = ["drums", "bass", "other"];
+const isSwappable = (stem) => SWAP_STEMS.includes(stem);
 const SENSITIVITY = "medium";
 const fmt = (s) => { if (!isFinite(s) || s < 0) s = 0; const m = Math.floor(s / 60); const x = Math.floor(s % 60); return `${m}:${String(x).padStart(2, "0")}`; };
 const stemOf = (data, label) => STEMS.find((s) => ((data.layers || {})[s] || []).some((p) => p.label === label));
@@ -339,7 +344,8 @@ const partMaxLen = (part) => Math.max(0.05, ...(((part && part.occurrences) || [
 const trimKey = (t) => t ? `${(+t.start).toFixed(3)}-${(+t.end).toFixed(3)}` : "";
 /* a stable signature of the current swap set — lets a render be reused while the
    swaps are unchanged, and re-triggered the moment a sound/effect/trim/part changes. */
-const sigOf = (swaps) => Object.entries(swaps).map(([l, v]) => l + ":" + v.name + ":" + v.fx.join("") + ":" + trimKey(v.trim)).join("|");
+const patKey = (p) => (p && p.steps) ? p.steps.map((b) => (b ? "1" : "0")).join("") : "";
+const sigOf = (swaps) => Object.entries(swaps).map(([l, v]) => l + ":" + v.name + ":" + v.fx.join("") + ":" + trimKey(v.trim) + ":" + patKey(v.pattern)).join("|");
 
 /* ============================================================ audio engine
    Imperative singleton around Web Audio: synced multi-stem playback with one
@@ -355,7 +361,14 @@ function ensureCtx() {
   if (!Eng.ctx) {
     Eng.ctx = new (window.AudioContext || window.webkitAudioContext)();
     Eng.master = Eng.ctx.createGain();
-    Eng.master.connect(Eng.ctx.destination);
+    // A gentle brick-wall limiter on the bus: swaps now play at their natural (sheet-preview)
+    // level instead of being ducked, so the summed mix can momentarily run hot — this catches
+    // the peaks transparently (threshold near 0 dBFS, fast attack) so nothing clips/distorts.
+    // The soloed preview peaks well below threshold, so it passes through untouched.
+    const lim = Eng.ctx.createDynamicsCompressor();
+    lim.threshold.value = -1.5; lim.knee.value = 0; lim.ratio.value = 20;
+    lim.attack.value = 0.003; lim.release.value = 0.12;
+    Eng.master.connect(lim); lim.connect(Eng.ctx.destination); Eng.limiter = lim;
   }
   if (Eng.ctx.state === "suspended") Eng.ctx.resume();
   return Eng.ctx;
@@ -595,8 +608,16 @@ function encodeWav(samples, sr) {
    The trim selection is in the *baked* buffer's timeline (fx like chipmunk change its
    length), so we render fx first and then slice. If it never decoded (rare format),
    fall back to the raw file (no fx / no trim — the server still fits it to the part). */
-async function bakeSwapFile(swap) {
+async function bakeSwapFile(swap, data, label) {
   if (!swap.rawBuf) return swap.file;
+  // compound: upload the one-bar fx-baked loop; the server tiles it across the part (loop:true).
+  if (patternHasHits(swap.pattern) && data && label != null) {
+    const hit = dryHit(swap);
+    const loop = assembleLoopBuffer(hit.mono, hit.sr, swap.pattern, barDurOf(data, partOf(data, label)));
+    let lb; try { lb = await renderFx(loop, swap.fx); } catch (e) { lb = loop; }
+    const base = swap.name.replace(/\.[^.]+$/, "");
+    return new File([encodeWav(bufToMono(lb), lb.sampleRate)], base + "_loop.wav", { type: "audio/wav" });
+  }
   const baked = await renderFx(swap.rawBuf, swap.fx);
   const sr = baked.sampleRate;
   let mono = bufToMono(baked);
@@ -614,65 +635,163 @@ async function bakeSwapFile(swap) {
 
 /* ---- CLIENT-SIDE SPLICE: build the remix in the browser, no Modal round-trip ----
    The swap's effects are already baked client-side (renderFx). Placement is the only
-   thing the server used to do, and it edits just ONE stem — so we replicate
-   render.render_medley(confine=True) here on the decoded buffers we already hold:
-   level-match the sample to the stem's loudness, then drop it ONCE per occurrence
-   (trimmed to the occurrence length), edge-faded, with a short leading crossfade from
-   the original stem. Instant + free; the server render is kept only for export. */
+   thing the server used to do, and it edits just ONE stem — so we replicate it here on the
+   decoded buffers we already hold: keep the swap at its own (sheet-preview) level, then drop
+   it ONCE per occurrence (trimmed to the occurrence length, stereo preserved), edge-faded,
+   with a short leading crossfade from the original stem. Instant + free; export uses the
+   server render. */
 
-/* per-stem target loudness from analysis.json (stems[].loudness_lufs, keyed by type) */
-function stemLufs(data, stem) {
-  const s = (data.stems || []).find((x) => x.type === stem);
-  return s && typeof s.loudness_lufs === "number" ? s.loudness_lufs : null;
-}
-/* linear gain so mono `y` hits `target` LUFS. Uses an RMS-dBFS proxy (= dsp.measure_lufs's
-   own fallback); the server's pyloudnorm match is a touch more exact, so an exported
-   bounce may differ by a dB or two — fine for an in-mix preview. */
-function gainToLufs(y, target) {
-  if (target == null || !y.length) return 1;
-  let sum = 0; for (let i = 0; i < y.length; i++) sum += y[i] * y[i];
-  const rms = Math.sqrt(sum / y.length);
-  if (rms <= 0) return 1;
-  return Math.pow(10, (target - 20 * Math.log10(rms)) / 20);
-}
 /* linear fade in/out of `n` samples, in place (mirror of dsp.edge_fade) */
 function edgeFade(y, n) {
   if (n <= 0 || 2 * n >= y.length) return y;
   for (let i = 0; i < n; i++) { const r = i / n; y[i] *= r; y[y.length - 1 - i] *= r; }
   return y;
 }
-/* Overwrite mono `repl` into every channel of stereo `dst` at sample `start`,
-   crossfading the leading `xf` samples from the original audio into the sample so the
-   seam doesn't click (mirror of render._place; confined placement = overwrite, not sum). */
-function placeMono(dst, start, repl, xf) {
-  const end = Math.min(start + repl.length, dst.length);
+/* Overwrite `pieces` (1 = mono → both channels; 2 = stereo → L/R) into `dst` at sample
+   `start`, crossfading the leading `xf` samples from the original audio into the sample so
+   the seam doesn't click (mirror of render._place; confined placement = overwrite). Keeping
+   the sample's own L/R (instead of downmixing to mono) preserves its width and low end —
+   a mono downmix can phase-cancel bass and flatten the sound in the mix. */
+function placeChans(dst, start, pieces, xf) {
+  const end = Math.min(start + pieces[0].length, dst.length);
   const n = end - start; if (n <= 0) return;
   const k = Math.min(xf, n);
   for (let ch = 0; ch < dst.numberOfChannels; ch++) {
     const d = dst.getChannelData(ch);
+    const repl = pieces[ch] || pieces[0];          // mono sample → same to both channels
     for (let i = 0; i < n; i++) {
-      let v = repl[i];
+      let v = repl[i] || 0;
       if (i < k) { const r = i / k; v = d[start + i] * (1 - r) + v * r; }
       d[start + i] = v;
     }
   }
 }
-/* bake fx + trim into a mono Float32 (own copy, safe to mutate) at the engine sample rate */
-async function bakeSwapBuffer(swap) {
-  if (!swap.rawBuf) return null;
-  const baked = await renderFx(swap.rawBuf, swap.fx);
-  const sr = baked.sampleRate;
-  let mono = bufToMono(baked);
+/* up to 2 channels of an AudioBuffer as own-copy Float32s (safe to mutate) */
+function chansOf(buf) {
+  const n = Math.min(2, buf.numberOfChannels), out = [];
+  for (let c = 0; c < n; c++) out.push(buf.getChannelData(c).slice());
+  return out;
+}
+/* RMS of a sample's mono mix (for level-matching) */
+function rmsOfChans(chans) {
+  const len = chans[0].length, nc = chans.length; if (!len) return 0;
+  let sum = 0;
+  for (let i = 0; i < len; i++) { let s = 0; for (let c = 0; c < nc; c++) s += chans[c][i]; s /= nc; sum += s * s; }
+  return Math.sqrt(sum / len);
+}
+/* absolute peak across all channels (for the anti-clip guard) */
+function peakOfChans(chans) {
+  let p = 0; for (const ch of chans) for (let i = 0; i < ch.length; i++) { const a = Math.abs(ch[i]); if (a > p) p = a; }
+  return p;
+}
+/* RMS of `buf` over sample range [a,b) across all channels — how loud the original audio
+   under the slot actually is. Matching to THIS (the part's local energy) keeps a swap as
+   present as the sound it replaces, vs matching to the stem's whole-track LUFS (which is
+   dragged down by silent gaps and buries punchy samples ~10-16 dB too quiet). */
+function rmsRegion(buf, a, b) {
+  a = Math.max(0, a | 0); b = Math.min(buf.length, b | 0); if (b <= a) return 0;
+  let sum = 0; const nc = buf.numberOfChannels;
+  for (let c = 0; c < nc; c++) { const d = buf.getChannelData(c); for (let i = a; i < b; i++) sum += d[i] * d[i]; }
+  return Math.sqrt(sum / ((b - a) * nc));
+}
+/* ---- COMPOUND BEAT: one short sound, laid down on a 16-step grid → a repeating pattern.
+   Instead of confining one sound to the whole part, the user toggles steps; we build a
+   one-bar loop from the trimmed (dry) hit, then bake the effects over the WHOLE loop (so an
+   echo rings across the pattern, not per-hit), then tile that loop bar-by-bar across the
+   part. A swap with no active steps stays in the original "fill the slot once" mode. */
+const STEPS_PER_BAR = 16;
+const patternHasHits = (p) => !!(p && p.steps && p.steps.some(Boolean));
+// step patterns over one 16-step bar (every 4 steps = one beat).
+const mkPattern = (on) => ({ steps: Array.from({ length: STEPS_PER_BAR }, (_, i) => on.includes(i)), stepsPerBar: STEPS_PER_BAR });
+const PRESETS = {
+  floor: () => mkPattern([0, 4, 8, 12]),                 // four-on-the-floor
+  eighth: () => mkPattern([0, 2, 4, 6, 8, 10, 12, 14]),  // 8th notes
+  sixteenth: () => mkPattern([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
+  clear: () => mkPattern([]),
+};
+
+/* duration (sec) of the part's representative bar — the loop length the step grid maps onto.
+   bars[] is the ground truth; fall back to tempo if a bar is missing. */
+function barDurOf(data, part) {
+  const bars = data.bars || [];
+  const idx = part && (part.representative_bar != null ? part.representative_bar
+    : (part.occurrences && part.occurrences[0] && part.occurrences[0].start_bar));
+  const b = bars[idx];
+  if (b && b.end_sec > b.start_sec) return b.end_sec - b.start_sec;
+  const bpm = data.tempo_bpm || 120, beats = (data.time_signature && data.time_signature.beats_per_bar) || 4;
+  return 60 / bpm * beats;
+}
+/* the dry (no-fx) trimmed mono hit — the unit sound the pattern repeats. Trim is applied to
+   the raw buffer so its indices stay valid regardless of effects (fx are baked on the loop). */
+function dryHit(swap) {
+  if (!swap || !swap.rawBuf) return null;
+  const sr = swap.rawBuf.sampleRate;
+  let mono = bufToMono(swap.rawBuf);
   const tr = swap.trim;
-  if (tr && (tr.start > 1e-3 || tr.end < baked.duration - 1e-3) && tr.end > tr.start) {
-    const s = Math.max(0, Math.floor(tr.start * sr));
-    const e = Math.min(mono.length, Math.ceil(tr.end * sr));
+  if (tr && (tr.start > 1e-3 || tr.end < swap.rawBuf.duration - 1e-3) && tr.end > tr.start) {
+    const s = Math.max(0, Math.floor(tr.start * sr)), e = Math.min(mono.length, Math.ceil(tr.end * sr));
     mono = mono.slice(s, Math.max(s + 1, e));
-  } else {
-    mono = mono.slice();
-  }
+  } else mono = mono.slice();
   return { mono, sr };
 }
+/* assemble one bar (an AudioBuffer, so renderFx can process it): sum the hit at every active
+   step. A hit longer than the bar wraps back to the start, so the loop tiles seamlessly. */
+function assembleLoopBuffer(hitMono, sr, pattern, barDur) {
+  const ctx = ensureCtx();
+  const barN = Math.max(1, Math.round(barDur * sr));
+  const out = new Float32Array(barN);
+  const steps = pattern.steps, S = pattern.stepsPerBar || steps.length;
+  const stepN = barN / S;
+  for (let i = 0; i < S; i++) {
+    if (!steps[i]) continue;
+    const off = Math.round(i * stepN);
+    for (let j = 0; j < hitMono.length; j++) out[(off + j) % barN] += hitMono[j];
+  }
+  const buf = ctx.createBuffer(1, barN, sr); buf.copyToChannel(out, 0, 0); return buf;
+}
+/* The audio unit to place for a swap (1-2 channels), plus how to place it:
+   - "loop": a one-bar fx-baked compound (pattern set), mono → tiled bar-by-bar across the part.
+   - "fill": fx-baked, trimmed clip, STEREO preserved → dropped once per occurrence. */
+async function bakeSwapUnit(swap, data, label) {
+  if (!swap || !swap.rawBuf) return null;
+  if (patternHasHits(swap.pattern)) {
+    const hit = dryHit(swap); if (!hit || !hit.mono.length) return null;
+    const barDur = barDurOf(data, partOf(data, label));
+    const loop = assembleLoopBuffer(hit.mono, hit.sr, swap.pattern, barDur);
+    let baked; try { baked = await renderFx(loop, swap.fx); } catch (e) { baked = loop; }
+    return { chans: [bufToMono(baked)], sr: baked.sampleRate, mode: "loop", barN: Math.round(barDur * baked.sampleRate) };
+  }
+  const baked = await renderFx(swap.rawBuf, swap.fx);
+  const sr = baked.sampleRate;
+  let chans = chansOf(baked);
+  const tr = swap.trim;
+  if (tr && (tr.start > 1e-3 || tr.end < baked.duration - 1e-3) && tr.end > tr.start) {
+    const s = Math.max(0, Math.floor(tr.start * sr)), e = Math.min(chans[0].length, Math.ceil(tr.end * sr));
+    chans = chans.map((ch) => ch.slice(s, Math.max(s + 1, e)));
+  }
+  return { chans, sr, mode: "fill" };
+}
+/* tile a one-bar loop across an occurrence: one copy at each bar's start (overlap-add so fx
+   tails ring across bars), clipped to the occurrence length. Falls back to a fixed bar
+   stride if per-bar boundaries aren't available. Returns a mono Float32 of length n. */
+function tileLoop(loopMono, sr, data, occ, barN, n) {
+  const out = new Float32Array(n);
+  const bars = data.bars || [];
+  const starts = [];
+  if (bars.length && occ.start_bar != null && occ.end_bar != null && bars[occ.start_bar]) {
+    for (let b = occ.start_bar; b <= occ.end_bar; b++) {
+      const bar = bars[b]; if (bar) starts.push(Math.round((bar.start_sec - occ.start_sec) * sr));
+    }
+  }
+  if (!starts.length) for (let s = 0; s < n; s += barN) starts.push(s);
+  for (const s of starts) {
+    if (s >= n) continue;
+    const m = Math.min(loopMono.length, n - s);
+    for (let j = 0; j < m; j++) out[s + j] += loopMono[j];
+  }
+  return out;
+}
+
 /* Build the remixed stem buffers entirely client-side. Returns {editedBuffers, slots}.
    editedBuffers = originals everywhere, with touched stems replaced by edited copies. */
 async function buildEditedBuffers(data, swaps) {
@@ -686,14 +805,28 @@ async function buildEditedBuffers(data, swaps) {
     const part = partOf(data, label);
     const src = stem && orig[stem];
     if (!stem || !part || !src) continue;
-    const baked = await bakeSwapBuffer(swap);
-    if (!baked || !baked.mono.length) continue;
+    const baked = await bakeSwapUnit(swap, data, label);
+    if (!baked || !baked.chans || !baked.chans[0] || !baked.chans[0].length) continue;
     const sr = src.sampleRate;
     // baked sr == stem sr (both decoded at ctx.sampleRate); guard anyway
     if (Math.abs(baked.sr - sr) > 1) continue;
-    let sample = baked.mono;
-    const g = gainToLufs(sample, stemLufs(data, stem));   // level-match once (lufs is per-stem)
-    if (g !== 1) for (let i = 0; i < sample.length; i++) sample[i] *= g;
+    // Level the swap to keep the presence/punch you hear in the sheet preview. Matching is
+    // BOOST-ONLY: a quiet sample is lifted toward how loud this part actually plays (the
+    // original stem's energy under the part's representative bar), but a loud/explosive sample
+    // is NEVER ducked below its own level — that downward match is what made swaps sound capped
+    // and muffled in the mix. An anti-clip guard keeps the swap itself under full scale; the
+    // master limiter handles the summed mix.
+    const bars = data.bars || [];
+    const rb = bars[part.representative_bar];
+    const sampleRms = rmsOfChans(baked.chans);
+    let g = 1;
+    if (rb && sampleRms > 1e-6) {
+      const target = rmsRegion(src, rb.start_sec * sr, rb.end_sec * sr);
+      if (target > 1e-6) g = Math.min(4, Math.max(1, target / sampleRms));   // lift quiet, never duck
+    }
+    const peak = peakOfChans(baked.chans);
+    if (peak > 1e-6) g = Math.min(g, 0.99 / peak);              // don't let the swap itself clip
+    if (g !== 1) for (const ch of baked.chans) for (let i = 0; i < ch.length; i++) ch[i] *= g;
     if (!writable[stem]) {
       const w = ctx.createBuffer(src.numberOfChannels, src.length, sr);
       for (let ch = 0; ch < src.numberOfChannels; ch++) w.copyToChannel(src.getChannelData(ch).slice(), ch, 0);
@@ -705,9 +838,12 @@ async function buildEditedBuffers(data, swaps) {
     for (const occ of (part.occurrences || [])) {
       const n = Math.round((occ.end_sec - occ.start_sec) * sr);
       if (n <= 0) continue;
-      const piece = sample.subarray(0, Math.min(n, sample.length)).slice();   // confine to occ length
-      edgeFade(piece, fadeN);
-      placeMono(dst, Math.round(occ.start_sec * sr), piece, xf);
+      // compound → tile the one-bar loop (mono); fill → drop the clip once, keeping its stereo.
+      const pieces = baked.mode === "loop"
+        ? [tileLoop(baked.chans[0], sr, data, occ, baked.barN, n)]
+        : baked.chans.map((ch) => ch.subarray(0, Math.min(n, ch.length)).slice());   // confine to occ length
+      for (const p of pieces) edgeFade(p, fadeN);
+      placeChans(dst, Math.round(occ.start_sec * sr), pieces, xf);
       slots++;
     }
   }
@@ -726,15 +862,16 @@ async function previewMedley(data, song, swaps) {
    bounce them in one mix (POST /api/render-medley), and return the render info (incl.
    paths.mp3/wav for download), stamped with the swap `sig`. Used only when the user taps
    "export jawn" — in-app preview/A-B now plays the client-side splice (previewMedley). */
-async function renderMedley(song, swaps, onStatus) {
+async function renderMedley(data, song, swaps, onStatus) {
   const entries = Object.entries(swaps);
   const placements = [];
   for (const [label, v] of entries) {
     onStatus && onStatus(`uploading ${v.name} …`);
-    const file = v.file || await bakeSwapFile(v);
+    // a compound swap must upload its loop (not the stale fill file) so export tiles it.
+    const file = patternHasHits(v.pattern) ? await bakeSwapFile(v, data, label) : (v.file || await bakeSwapFile(v, data, label));
     const r = await fetch(api(`/api/sample?name=${encodeURIComponent(v.name)}`), { method: "POST", body: file });
     const info = await r.json(); if (!r.ok || info.error) throw new Error(info.error || "sample upload failed");
-    placements.push({ label, sample_id: info.id });
+    placements.push({ label, sample_id: info.id, loop: patternHasHits(v.pattern) });
   }
   onStatus && onStatus(`bouncing ${entries.length} swap${entries.length > 1 ? "s" : ""} for export … (~10–40s)`);
   const r2 = await fetch(api("/api/render-medley"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ song, placements, name: "medley", confine: true }) });
@@ -1111,7 +1248,7 @@ function Studio({ data, song, swaps, setSwaps, setStep, flash, bounce, setBounce
             </div>
           )}
           {STEMS.map((stem) => (
-            <Lane key={stem} data={data} stem={stem} pps={PPS} trackW={trackW} muted={muted[stem]} swaps={swaps} loopLabel={loopLabel}
+            <Lane key={stem} data={data} stem={stem} pps={PPS} trackW={trackW} muted={muted[stem]} swaps={swaps} loopLabel={loopLabel} swappable={isSwappable(stem)}
               onToggle={() => setMuted((m) => ({ ...m, [stem]: !m[stem] }))} onTap={tapPart} />
           ))}
         </div>
@@ -1148,7 +1285,7 @@ function Studio({ data, song, swaps, setSwaps, setStep, flash, bounce, setBounce
   );
 }
 
-function Lane({ data, stem, pps, trackW, muted, swaps, loopLabel, onToggle, onTap }) {
+function Lane({ data, stem, pps, trackW, muted, swaps, loopLabel, swappable = true, onToggle, onTap }) {
   const parts = PARTS(data, stem);
   return (
     <div className={"tlane" + (muted ? " muted" : "")}>
@@ -1157,7 +1294,14 @@ function Lane({ data, stem, pps, trackW, muted, swaps, loopLabel, onToggle, onTa
         <div className="ct" onClick={onToggle}>{muted ? "muted" : "on"}</div>
       </div>
       <div className="track" style={{ width: trackW }}>
-        {parts.flatMap((p) => {
+        {/* backing lane (vocals): show where it plays, but it's not a swap target — flat,
+            dim, untappable blocks. You can still mute the whole lane from the header. */}
+        {!swappable && parts.flatMap((p) => p.occurrences.map((occ, i) => (
+          <div key={p.label + i} className="blk" aria-hidden="true"
+            style={{ left: occ.start_sec * pps, width: Math.max(7, (occ.end_sec - occ.start_sec) * pps),
+              background: `var(--stem-${stem}-soft)`, boxShadow: `inset 0 0 0 1px var(--line)`, opacity: 0.5, pointerEvents: "none" }} />
+        )))}
+        {swappable && parts.flatMap((p) => {
           // label the widest occurrence so every part is identifiable once
           let wi = 0, ww = -1;
           p.occurrences.forEach((o, i) => { const w = o.end_sec - o.start_sec; if (w > ww) { ww = w; wi = i; } });
@@ -1287,6 +1431,23 @@ function TrimPanel({ buf, trim, setTrim, cap, view, setView }) {
 }
 
 /* ------------------------------------------------------------ Swap sheet */
+/* ------------------------------------------------------------ Step grid
+   16 steps over one bar (4 beats × 4), tap to place a hit. The active colour is the part's
+   stem colour so the beat reads as "this lane". Repeats across every occurrence of the part. */
+function StepGrid({ pattern, stem, onToggle }) {
+  return (
+    <div style={{ display: "flex", gap: 3, alignItems: "stretch" }}>
+      {pattern.steps.map((on, i) => (
+        <button key={i} aria-label={"step " + (i + 1)} onClick={() => onToggle(i)}
+          style={{ flex: "1 1 0", minWidth: 0, height: 34, padding: 0, border: "none", borderRadius: 6, cursor: "pointer",
+            marginLeft: i % 4 === 0 && i > 0 ? 7 : 0,
+            background: on ? `var(--stem-${stem})` : "var(--stage-3)",
+            boxShadow: on ? `var(--glow-${stem})` : "inset 0 0 0 1px var(--line)", transition: "background .08s" }} />
+      ))}
+    </div>
+  );
+}
+
 function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
   const stem = stemOf(data, label); const part = partOf(data, label);
   const cap = partMaxLen(part);                           // longest the replacement may run
@@ -1303,15 +1464,21 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
   const rec = useRecorder((f) => chooseSound(f));
   const setTrim = (t) => setSwap((s) => s ? { ...s, trim: (typeof t === "function" ? t(s.trim || { start: 0, end: 0 }) : t) } : s);
   const trim = (swap && swap.trim) || { start: 0, end: 0 };
+  // pattern (compound-beat) mode: the trimmed clip is one hit, repeated on a 16-step grid.
+  const inPattern = !!(swap && swap.pattern);
+  const [loopBuf, setLoopBuf] = useState(null);          // fx-baked compound loop, for the preview
+  const setPattern = (p) => setSwap((s) => s ? { ...s, pattern: p } : s);
+  const toggleStep = (i) => setPattern({ ...swap.pattern, steps: swap.pattern.steps.map((v, j) => (j === i ? !v : v)) });
 
   // Bake fx into a buffer for the waveform/trim, then re-fit the selection to the new
   // length: keep "whole clip" selected if it was, else clamp into [0,dur]∩cap. (Effects
-  // like chipmunk/echo change the length, so the trim must follow.)
+  // like chipmunk/echo change the length, so the trim must follow.) In pattern mode the
+  // panel shows the DRY hit — effects are baked on the assembled loop, not the single hit.
   useEffect(() => {
     if (!swap || !swap.rawBuf) { setBaked(null); return; }
     let cancelled = false;
     (async () => {
-      let b; try { b = await renderFx(swap.rawBuf, swap.fx); } catch (e) { b = swap.rawBuf; }
+      let b; try { b = inPattern ? swap.rawBuf : await renderFx(swap.rawBuf, swap.fx); } catch (e) { b = swap.rawBuf; }
       if (cancelled) return;
       const dur = b.duration, prev = prevDur.current, cur = swap.trim;
       const wasFull = !(cur && cur.end > cur.start) || (prev > 0 && cur.start <= 1e-3 && cur.end >= prev - 1e-3);
@@ -1322,7 +1489,21 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
       setBaked(b); setTrim(nt); setView(zoomTo(dur, nt, cap));
     })();
     return () => { cancelled = true; };
-  }, [swap && swap.rawBuf, swap && swap.fx.join(",")]);
+  }, [swap && swap.rawBuf, swap && swap.fx.join(","), inPattern]);
+
+  // Build the fx-baked one-bar compound loop for the "your sound" preview (pattern mode only).
+  useEffect(() => {
+    if (!inPattern || !swap.rawBuf || !patternHasHits(swap.pattern)) { setLoopBuf(null); return; }
+    let cancelled = false;
+    (async () => {
+      const hit = dryHit(swap); if (!hit || !hit.mono.length) return;
+      const barDur = barDurOf(data, part);
+      const lp = assembleLoopBuffer(hit.mono, hit.sr, swap.pattern, barDur);
+      let b; try { b = await renderFx(lp, swap.fx); } catch (e) { b = lp; }
+      if (!cancelled) setLoopBuf({ buf: b, barDur });
+    })();
+    return () => { cancelled = true; };
+  }, [swap && swap.rawBuf, inPattern, patKey(swap && swap.pattern), swap && swap.fx.join(","), trimKey(trim)]);
 
   // A/B preview loop: "original" loops the reference clip, "your sound" loops the
   // baked buffer's *trimmed* region. Honors `paused`, and always tears down on unmount
@@ -1332,19 +1513,25 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
     engStopReference();
     if (!paused && ab === "orig") {
       playReference(song, label).catch((e) => { if (!cancelled) flash("preview unavailable", true); });
-    } else if (!paused && ab === "new" && baked) {
-      const ctx = ensureCtx(); const src = ctx.createBufferSource(); src.buffer = baked;
-      const tr = (swap && swap.trim) || { start: 0, end: baked.duration };
-      src.loop = true; src.loopStart = tr.start; src.loopEnd = Math.max(tr.start + 0.02, tr.end);
-      src.connect(Eng.master); try { src.start(0, tr.start); } catch (e) {}
+    } else if (!paused && ab === "new" && (loopBuf || baked)) {
+      const ctx = ensureCtx(); const src = ctx.createBufferSource();
+      if (loopBuf) {                                  // compound: loop the one-bar beat
+        src.buffer = loopBuf.buf; src.loop = true; src.loopStart = 0;
+        src.loopEnd = Math.min(loopBuf.buf.duration, loopBuf.barDur);
+      } else {                                         // single sound: loop the trimmed region
+        src.buffer = baked; const tr = (swap && swap.trim) || { start: 0, end: baked.duration };
+        src.loop = true; src.loopStart = tr.start; src.loopEnd = Math.max(tr.start + 0.02, tr.end);
+      }
+      src.connect(Eng.master); try { src.start(0, src.loopStart); } catch (e) {}
       previewSrc.current = src;
     }
     return () => { cancelled = true; engStopReference(); if (previewSrc.current) { try { previewSrc.current.stop(); } catch (e) {} previewSrc.current = null; } };
-  }, [ab, paused, baked]);
+  }, [ab, paused, baked, loopBuf]);
 
-  // keep the looping preview's region in sync while dragging the handles (no restart)
+  // keep the looping preview's region in sync while dragging the handles (no restart).
+  // Skipped in pattern mode — there the loopBuf effect rebuilds the beat instead.
   useEffect(() => {
-    const s = previewSrc.current; if (!s) return;
+    const s = previewSrc.current; if (!s || loopBuf) return;
     s.loopStart = trim.start; s.loopEnd = Math.max(trim.start + 0.02, trim.end);
   }, [trim.start, trim.end]);
 
@@ -1355,7 +1542,7 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
     setSwap({ name: file.name, fx: [], file, rawBuf, stem, trim: { start: 0, end: 0 } }); setAb("new");
   };
   // a kit sound: fetch ONE mp3 on tap (cacheable), decode it, and load it exactly like an
-  // uploaded file (file:null — bakeSwapFile/bakeSwapBuffer bake from rawBuf downstream).
+  // uploaded file (file:null — bakeSwapFile/bakeSwapUnit bake from rawBuf downstream).
   const chooseKitSound = async (snd) => {
     let rawBuf = null;
     try { rawBuf = await fetchDecode(kitUrl(snd.file), "default"); }
@@ -1379,8 +1566,8 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
     if (!swap) return;
     setBusy(true);
     try {
-      const file = await bakeSwapFile(swap);
-      onUse(label, { stem, fx: swap.fx, name: swap.name, file, rawBuf: swap.rawBuf, trim: swap.trim });
+      const file = await bakeSwapFile(swap, data, label);
+      onUse(label, { stem, fx: swap.fx, name: swap.name, file, rawBuf: swap.rawBuf, trim: swap.trim, pattern: swap.pattern || null });
     } catch (e) { flash("could not prepare sound: " + e.message, true); setBusy(false); }
   };
 
@@ -1430,7 +1617,7 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
               </div>
               {baked && (
                 <React.Fragment>
-                  <div className="lbl" style={{ margin: "11px 0 6px" }}>trim · drag the handles to fit {label} (max {cap.toFixed(2)}s)</div>
+                  <div className="lbl" style={{ margin: "11px 0 6px" }}>trim · {inPattern ? "the single hit the pattern repeats" : `drag the handles to fit ${label}`} (max {cap.toFixed(2)}s)</div>
                   <TrimPanel buf={baked} trim={trim} setTrim={setTrim} cap={cap} view={view} setView={setView} />
                   <div className="trimbar">
                     <span className="info">using {(trim.end - trim.start).toFixed(2)}s of {baked.duration.toFixed(2)}s{baked.duration > cap + 1e-3 ? ` · max ${cap.toFixed(2)}s to fit` : ""}</span>
@@ -1442,7 +1629,30 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
                   </div>
                 </React.Fragment>
               )}
-              <div className="lbl" style={{ margin: "11px 0 6px" }}>effects · tap to bake on{!swap.rawBuf ? " (unavailable for this file)" : ""}</div>
+              {/* pattern · lay one sound onto a 16-step grid → a repeating beat. fill keeps the
+                  old behaviour (drop the sound once per part). */}
+              {swap.rawBuf && (
+                <React.Fragment>
+                  <div className="lbl" style={{ margin: "13px 0 6px" }}>pattern · {inPattern ? "tap steps — this beat repeats across " + label : "one sound, dropped once per part"}</div>
+                  <div className="ab" style={{ marginBottom: inPattern ? 8 : 0 }}>
+                    <button className={!inPattern ? "on" : ""} onClick={() => setPattern(null)}>fill</button>
+                    <button className={inPattern ? "on" : ""} onClick={() => setPattern(swap.pattern || PRESETS.floor())}>pattern</button>
+                  </div>
+                  {inPattern && (
+                    <React.Fragment>
+                      <StepGrid pattern={swap.pattern} stem={stem} onToggle={toggleStep} />
+                      <div className="trimbar" style={{ marginTop: 8 }}>
+                        <span className="info">{swap.pattern.steps.filter(Boolean).length} hits/bar · effects bake on the loop</span>
+                        <button className="tx" onClick={() => setPattern(PRESETS.floor())}>4-floor</button>
+                        <button className="tx" onClick={() => setPattern(PRESETS.eighth())}>8ths</button>
+                        <button className="tx" onClick={() => setPattern(PRESETS.sixteenth())}>16ths</button>
+                        <button className="tx" onClick={() => setPattern(PRESETS.clear())}>clear</button>
+                      </div>
+                    </React.Fragment>
+                  )}
+                </React.Fragment>
+              )}
+              <div className="lbl" style={{ margin: "13px 0 6px" }}>effects · tap to bake on{inPattern ? " the loop" : ""}{!swap.rawBuf ? " (unavailable for this file)" : ""}</div>
               <div className="fxwrap">
                 {FX_ORDER.map((id) => (
                   <button key={id} className={"fxb" + (swap.fx.includes(id) ? " on" : "")} disabled={!swap.rawBuf} onClick={() => toggleFx(id)}>{FX[id].e} {FX[id].name}</button>
@@ -1450,7 +1660,7 @@ function SwapSheet({ data, song, label, current, onClose, onUse, flash }) {
               </div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", marginTop: 9, lineHeight: 1.45, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <button onClick={changeSource} style={{ fontFamily: "var(--font-mono)", fontSize: 11, background: "var(--stage-3)", boxShadow: "inset 0 0 0 1px var(--line)", color: "var(--ink-1)", border: "none", borderRadius: 999, padding: "5px 10px", cursor: "pointer" }}>↩ change source</button>
-                <span>{source === "kit" ? "pick another from the kit below · " : ""}fills all ×{part.occurrence_count} spots</span>
+                <span>{source === "kit" ? "pick another from the kit below · " : ""}{inPattern && patternHasHits(swap.pattern) ? "beat repeats across" : "fills all"} ×{part.occurrence_count} spots</span>
               </div>
             </React.Fragment>
           )}
@@ -1832,7 +2042,8 @@ function Matchmaker({ data, song, swaps, setSwaps, onClose, flash }) {
       // dry, untrimmed wav so the ranking reflects the sound itself
       const file = await bakeSwapFile({ rawBuf: d.rawBuf, fx: [], name: d.name, file: d.file });
       const [info] = await Promise.all([matchSound(song, file), new Promise((r) => setTimeout(r, 1400))]);
-      setRecs(info.recommendations || []);
+      // drop vocals: you swap beats, not voices (the vocals stem stays as fixed backing)
+      setRecs((info.recommendations || []).filter((r) => isSwappable(r.stem)));
       setSoundLen(info.sound_len_sec || (d.rawBuf ? d.rawBuf.duration : 1));
       setPhase("results");
     } catch (e) { flash("matchmaker: " + e.message, true); setPhase("add"); }
@@ -1979,7 +2190,7 @@ function Finalize({ data, song, swaps, setSwaps, setStep, flash, bounce, setBoun
     if (bounce && bounce.paths && bounce.sig === sig) { download(bounce.paths); return; }
     setExporting(true);
     try {
-      const info = await renderMedley(song, swaps, setStatus);   // server bounce; leaves the local preview buffers intact
+      const info = await renderMedley(data, song, swaps, setStatus);   // server bounce; leaves the local preview buffers intact
       setBounce(info); setStatus(`exported — ${info.slots_replaced} slots`);
       download(info.paths);
     } catch (e) { setStatus("export failed: " + e.message); flash(e.message, true); }

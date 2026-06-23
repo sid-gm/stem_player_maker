@@ -61,22 +61,6 @@ def _place(dst: np.ndarray, start: int, repl: np.ndarray, xf: int) -> None:
     dst[start:end] = repl
 
 
-def _occurrences(targets: list["SnapTarget"]) -> list[dict]:
-    """Collapse the per-bar SnapTargets of one label into one span per occurrence:
-    `{start_sec, end_sec}`. Bars inside an occurrence are contiguous, so the span runs
-    from the first bar's start to the last bar's end. Used by confined placement to
-    drop one sound per occurrence (instead of one per bar)."""
-    by_occ: dict[int, list] = {}
-    for t in targets:
-        by_occ.setdefault(t.occurrence_id, []).append(t)
-    spans = []
-    for _id, ts in sorted(by_occ.items()):
-        ts.sort(key=lambda t: t.start_sec)
-        spans.append({"start_sec": ts[0].start_sec,
-                      "end_sec": ts[-1].start_sec + ts[-1].duration_sec})
-    return spans
-
-
 def _load_sample(song_dir: Path, analysis: dict, stem: str, label: str,
                  sample: str | Path | None, sr: int) -> np.ndarray:
     """Mono sample for a placement, resampled to the stem's `sr` so its pitch and
@@ -138,7 +122,7 @@ def render_medley(song_dir: str | Path, placements: list[dict],
         if not target_wav.exists():
             raise SystemExit(f"missing stem: {target_wav}")
         plan.append({"label": label, "stem": stem, "targets": targets,
-                     "sample": pl.get("sample")})
+                     "sample": pl.get("sample"), "loop": pl.get("loop")})
 
     sr = sf.info(str(stem_dir / f"{plan[0]['stem']}.wav")).samplerate
 
@@ -154,17 +138,35 @@ def render_medley(song_dir: str | Path, placements: list[dict],
         sample_y = _load_sample(song_dir, analysis, stem, entry["label"],
                                 entry["sample"], sr)
         if confine:
-            # One placement per occurrence, trimmed to the occurrence's length: the
-            # sound fills exactly the part it replaces (no mid-occurrence restart, no
-            # ring-past). level-match once (lufs is per-stem, same for every slot).
+            # One placement per occurrence. Default: drop the sound once, trimmed to the
+            # occurrence's length, so it fills the part exactly (no mid-occurrence restart,
+            # no ring-past). loop: the sample is a one-bar compound beat — tile it bar by
+            # bar across the occurrence (overlap-add so fx tails ring across bars), turning a
+            # single hit laid on a step grid into a repeating beat. level-match once.
             snapped = snap(sample_y, sr, entry["targets"][0])
-            spans = _occurrences(entry["targets"])
-            for occ in spans:
-                n = int(round((occ["end_sec"] - occ["start_sec"]) * sr))
-                piece = dsp.edge_fade(snapped[:n], sr, 5.0) if n > 0 else snapped[:0]
-                start = int(round(occ["start_sec"] * sr))
-                _place(new_stem, start, _mono_to_stereo(piece), xf)
-            slots = len(spans)
+            by_occ: dict[int, list] = {}
+            for t in entry["targets"]:
+                by_occ.setdefault(t.occurrence_id, []).append(t)
+            slots = 0
+            for _id, ts in sorted(by_occ.items()):
+                ts.sort(key=lambda t: t.start_sec)
+                occ_start = ts[0].start_sec
+                occ_end = ts[-1].start_sec + ts[-1].duration_sec
+                n = int(round((occ_end - occ_start) * sr))
+                if n <= 0:
+                    continue
+                if entry.get("loop"):
+                    piece = np.zeros(n, dtype=np.float32)
+                    for t in ts:                       # one loop copy per bar of the part
+                        bs = int(round((t.start_sec - occ_start) * sr))
+                        m = min(len(snapped), n - bs)
+                        if bs >= 0 and m > 0:
+                            piece[bs:bs + m] += snapped[:m]
+                    piece = dsp.edge_fade(piece, sr, 5.0)
+                else:
+                    piece = dsp.edge_fade(snapped[:n], sr, 5.0)
+                _place(new_stem, int(round(occ_start * sr)), _mono_to_stereo(piece), xf)
+                slots += 1
         else:
             for t in entry["targets"]:
                 snapped = snap(sample_y, sr, t)

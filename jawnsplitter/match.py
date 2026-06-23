@@ -261,9 +261,12 @@ def recommend(song_dir, sound_path, n_best: int = 5, n_worst: int = 3) -> dict:
 
     # Rank the parts the studio timeline actually shows (repeated patterns); fall back
     # to every part only when there aren't enough repeated ones to fill best+worst.
-    pool = [p for p in cache["parts"] if int(p.get("count", 1)) >= 2]
+    # Vocals are never a swap target (they stay as fixed backing), so keep them out of
+    # the recommendations — you match beats, not voices.
+    swappable = [p for p in cache["parts"] if p.get("stem") != "vocals"]
+    pool = [p for p in swappable if int(p.get("count", 1)) >= 2]
     if len(pool) < n_best + n_worst:
-        pool = cache["parts"]
+        pool = swappable
 
     scored = []
     for po in pool:

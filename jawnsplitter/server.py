@@ -409,7 +409,8 @@ class Handler(SimpleHTTPRequestHandler):
                 if not cand.exists():
                     return self._send_json({"error": f"unknown sample_id: {sid}"}, 400)
                 sample = str(cand)
-            placements.append({"label": label, "sample": sample})
+            # loop: the sample is a one-bar compound beat to tile across the part (vs placed once)
+            placements.append({"label": label, "sample": sample, "loop": bool(pl.get("loop"))})
         try:
             info = render_medley(song_dir, placements, out_name=Path(name).name or "medley",
                                  write_stems=True, confine=confine)
